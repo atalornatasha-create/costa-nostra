@@ -1,0 +1,3204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>COSA NOSTRA &mdash; A Mafia Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600;800&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#07070a;
+  --ink2:#0d0e13;
+  --panel:#12131a;
+  --panel2:#171923;
+  --line:#2a2c39;
+  --bone:#d8d2c4;
+  --bone-dim:#9c968a;
+  --blood:#8e1119;
+  --blood-lit:#c2181f;
+  --blood-dark:#4b070c;
+  --gold:#b9975b;
+  --shadow:0 24px 60px rgba(0,0,0,.75);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family:'Cinzel',Georgia,serif;
+  color:var(--bone);
+  background:
+    radial-gradient(1100px 700px at 50% -12%, #1c1d26 0%, transparent 60%),
+    radial-gradient(700px 500px at 90% 110%, #2a0a0d 0%, transparent 65%),
+    linear-gradient(#08080b, #040406 70%);
+  min-height:100vh;
+  overflow-x:hidden;
+}
+
+/* ---- atmosphere ---- */
+.grain{
+  position:fixed; inset:0; pointer-events:none; z-index:60; opacity:.055;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23n)'/></svg>");
+  animation:flick 1.1s steps(2) infinite;
+}
+@keyframes flick{50%{opacity:.03}}
+.vignette{
+  position:fixed; inset:0; pointer-events:none; z-index:59;
+  background:radial-gradient(120% 90% at 50% 40%, transparent 45%, rgba(0,0,0,.82) 100%);
+}
+
+/* ---- topbar ---- */
+.topbar{
+  position:relative; z-index:5;
+  display:flex; flex-wrap:wrap; gap:14px;
+  align-items:baseline; justify-content:space-between;
+  padding:22px clamp(16px,4vw,48px) 14px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(rgba(10,10,14,.9), rgba(10,10,14,.35));
+}
+.brand{
+  font-family:'Cinzel Decorative',serif; font-weight:900;
+  font-size:clamp(1.5rem,4vw,2.4rem); letter-spacing:.09em;
+  margin:0; color:#efe9dc;
+  text-shadow:0 2px 0 #000, 0 0 26px rgba(194,24,31,.35);
+}
+.brand span{color:var(--blood-lit); text-shadow:0 0 22px rgba(194,24,31,.6)}
+.statusline{display:flex; gap:8px; flex-wrap:wrap}
+.tag{
+  font-family:'Special Elite',monospace; font-size:.7rem;
+  letter-spacing:.16em; text-transform:uppercase;
+  padding:6px 11px; border:1px solid var(--line);
+  background:#0f1016; color:var(--bone-dim);
+}
+.tag.muted{opacity:.75}
+.tag.blood{border-color:#5c1016; color:#e7a9ab; background:#1b0a0c}
+
+/* ---- layout ---- */
+.stage{padding:clamp(18px,4vw,42px); position:relative; z-index:4}
+.screen{display:none; animation:fade .5s ease both}
+.screen.active{display:block}
+@keyframes fade{from{opacity:0; transform:translateY(12px)}to{opacity:1;transform:none}}
+
+.panel{
+  background:linear-gradient(var(--panel), var(--ink2));
+  border:1px solid var(--line); box-shadow:var(--shadow);
+  padding:clamp(20px,3vw,34px); position:relative; overflow:hidden;
+}
+.panel::before{
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(105deg, rgba(255,255,255,.05) 0 12%, transparent 40%);
+}
+.panel.wide{max-width:760px; margin:0 auto}
+.panel-title{
+  font-family:'Cinzel Decorative',serif; font-weight:700;
+  font-size:clamp(1.2rem,2.6vw,1.7rem); margin:0 0 6px;
+  letter-spacing:.05em; color:#f0eadd;
+}
+.panel-title.small{font-size:1.05rem; letter-spacing:.14em; text-transform:uppercase; font-family:'Cinzel',serif}
+.panel-title::after{
+  content:''; display:block; width:76px; height:2px; margin-top:10px;
+  background:linear-gradient(90deg, var(--blood-lit), transparent);
+}
+.lede{color:var(--bone-dim); line-height:1.7; margin:14px 0 26px; font-size:.98rem}
+.finehint{
+  font-family:'Special Elite',monospace; font-size:.72rem;
+  color:#6d6a63; margin:16px 0 0; letter-spacing:.04em;
+}
+
+/* ---- form ---- */
+.field{margin-bottom:24px}
+.field>label{
+  display:block; font-family:'Special Elite',monospace;
+  font-size:.72rem; letter-spacing:.2em; text-transform:uppercase;
+  color:var(--bone-dim); margin-bottom:10px;
+}
+.rowflex{display:flex; align-items:center; gap:16px}
+input[type=range]{
+  -webkit-appearance:none; appearance:none; flex:1; height:3px;
+  background:linear-gradient(90deg,var(--blood),#33353f); outline:none;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none; width:20px; height:20px; border-radius:50%;
+  background:radial-gradient(circle at 35% 30%, #e33, var(--blood-dark));
+  border:1px solid #000; cursor:pointer; box-shadow:0 0 14px rgba(194,24,31,.8);
+}
+input[type=range]::-moz-range-thumb{
+  width:20px;height:20px;border-radius:50%;border:1px solid #000;
+  background:radial-gradient(circle at 35% 30%, #e33, var(--blood-dark)); cursor:pointer;
+}
+.numout{
+  font-family:'Cinzel Decorative',serif; font-size:1.5rem;
+  min-width:2.4ch; text-align:center; color:#fff;
+}
+.choices{display:flex; flex-wrap:wrap; gap:10px}
+.choice{
+  font-family:'Cinzel',serif; font-size:.85rem; letter-spacing:.06em;
+  padding:11px 18px; color:var(--bone-dim); cursor:pointer;
+  background:#0e0f15; border:1px solid var(--line); transition:.2s;
+}
+.choice:hover{color:#fff; border-color:#4a4d5e; transform:translateY(-1px)}
+.choice.selected{
+  color:#fff; border-color:var(--blood-lit); background:linear-gradient(#2a0b0e,#160709);
+  box-shadow:inset 0 0 22px rgba(194,24,31,.28);
+}
+
+/* ---- buttons ---- */
+.cta{
+  display:block; width:100%; margin-top:8px; cursor:pointer;
+  font-family:'Cinzel',serif; font-weight:800; font-size:1rem;
+  letter-spacing:.2em; text-transform:uppercase; color:#fff;
+  padding:16px 22px; border:1px solid #6d1218;
+  background:linear-gradient(#8e1119,#4b070c);
+  box-shadow:0 10px 30px rgba(142,17,25,.35), inset 0 1px 0 rgba(255,255,255,.14);
+  transition:.2s;
+}
+.cta:hover:not(:disabled){background:linear-gradient(#b5151e,#5d0910); transform:translateY(-2px)}
+.cta:disabled{opacity:.34; cursor:not-allowed}
+.cta.small{width:auto; padding:12px 26px; font-size:.82rem}
+.ghost{
+  cursor:pointer; font-family:'Cinzel',serif; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--bone-dim);
+  background:transparent; border:1px solid var(--line); padding:12px 22px; transition:.2s;
+}
+.ghost:hover{color:#fff; border-color:#555a6d}
+.ghost.small{font-size:.78rem; padding:11px 18px}
+.actionbar{display:flex; gap:12px; flex-wrap:wrap; margin-top:20px; align-items:center}
+
+/* ---- reveal / end card ---- */
+.card-reveal{max-width:620px; margin:0 auto; text-align:center; padding-top:44px}
+.kicker{
+  font-family:'Special Elite',monospace; font-size:.7rem; letter-spacing:.34em;
+  text-transform:uppercase; color:#6f6b63; margin:0 0 12px;
+}
+.role-name{
+  font-family:'Cinzel Decorative',serif; font-weight:900;
+  font-size:clamp(1.9rem,6vw,3rem); margin:0; color:#fff;
+  text-shadow:0 0 34px rgba(194,24,31,.55), 0 3px 0 #000;
+}
+.team-line{
+  font-family:'Special Elite',monospace; font-size:.78rem; letter-spacing:.24em;
+  text-transform:uppercase; color:#c9585c; margin:12px 0 20px;
+}
+.team-line.town{color:#7fa8c9}
+.role-desc{color:var(--bone-dim); line-height:1.75; font-size:.95rem; margin:0 auto 22px; max-width:46ch}
+.allies{
+  font-family:'Special Elite',monospace; font-size:.8rem; color:#e0a2a4;
+  border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+  padding:14px 6px; margin-bottom:24px; line-height:1.7;
+}
+.allies:empty{display:none}
+
+/* ---- blood ---- */
+.splat{
+  position:absolute; top:-40px; right:-30px; width:230px; height:230px;
+  pointer-events:none; opacity:.5; filter:blur(.3px);
+  background:radial-gradient(circle at 40% 35%, rgba(142,17,25,.95) 0 16%, transparent 17%),
+    radial-gradient(circle at 66% 52%, rgba(102,9,14,.9) 0 9%, transparent 10%),
+    radial-gradient(circle at 30% 66%, rgba(122,12,18,.85) 0 6%, transparent 7%),
+    radial-gradient(circle at 78% 26%, rgba(90,7,12,.8) 0 4%, transparent 5%),
+    radial-gradient(circle at 52% 78%, rgba(142,17,25,.6) 0 3%, transparent 4%);
+}
+.splat.big{width:340px; height:340px; opacity:.62; top:-70px; right:-70px}
+.drip{
+  position:absolute; left:0; right:0; top:0; height:16px; pointer-events:none;
+  background:
+    radial-gradient(10px 16px at 12% 0, var(--blood) 60%, transparent 61%),
+    radial-gradient(7px 22px at 34% 0, var(--blood-dark) 60%, transparent 61%),
+    radial-gradient(12px 12px at 58% 0, var(--blood) 60%, transparent 61%),
+    radial-gradient(8px 26px at 79% 0, var(--blood-dark) 60%, transparent 61%),
+    linear-gradient(var(--blood-dark), transparent 70%);
+  opacity:.85;
+}
+
+/* ---- game grid ---- */
+.grid{
+  display:grid; gap:20px; align-items:start;
+  grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);
+  max-width:1180px; margin:0 auto;
+}
+.prompt{
+  font-family:'Special Elite',monospace; font-size:.84rem; letter-spacing:.06em;
+  color:#d9b7b8; min-height:1.5em; margin:14px 0 20px;
+}
+.seats{display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.seat{
+  position:relative; text-align:left; cursor:default; width:100%;
+  font:inherit; color:inherit; display:block;
+  background:linear-gradient(#15161e,#0e0f14); border:1px solid var(--line);
+  padding:12px; transition:.18s; overflow:hidden;
+}
+.seat.pickable{cursor:pointer}
+.seat.pickable:hover{border-color:#5c6072; transform:translateY(-2px)}
+.seat.chosen{border-color:var(--blood-lit); box-shadow:inset 0 0 26px rgba(194,24,31,.3)}
+.seat.dead{opacity:.42; filter:grayscale(.85)}
+.seat.dead::after{
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background:radial-gradient(circle at 72% 22%, rgba(142,17,25,.85) 0 11%, transparent 12%),
+    radial-gradient(circle at 84% 40%, rgba(90,7,12,.8) 0 6%, transparent 7%);
+}
+.seat.you{border-color:var(--gold)}
+.seat-head{display:flex; align-items:center; gap:10px}
+.face{
+  width:40px; height:40px; flex:none; border:1px solid #000;
+  background:#0a0a0d; display:grid; place-items:center; font-size:1.35rem;
+  box-shadow:inset 0 0 12px rgba(0,0,0,.8);
+}
+.seat-name{display:block;font-size:.92rem; color:#efe9dc; line-height:1.25}
+.seat-sub{display:block;
+  font-family:'Special Elite',monospace; font-size:.62rem; letter-spacing:.14em;
+  text-transform:uppercase; color:#7c776f;
+}
+.seat-sub.mafia{color:#d8595e}
+.seat-tags{display:flex; flex-wrap:wrap; gap:5px; margin-top:10px}
+.mini{
+  font-family:'Special Elite',monospace; font-size:.58rem; letter-spacing:.12em;
+  text-transform:uppercase; padding:3px 6px; border:1px solid var(--line); color:#8b8579;
+}
+.mini.hot{border-color:#5c1016; color:#e19a9d; background:#190709}
+.mini.cool{border-color:#1d3548; color:#8fb7d4; background:#08121a}
+
+/* ---- log ---- */
+.log{max-height:62vh; overflow-y:auto; padding-right:6px; margin-top:14px}
+.log::-webkit-scrollbar{width:6px}
+.log::-webkit-scrollbar-thumb{background:#332024}
+.entry{
+  font-family:'Special Elite',monospace; font-size:.8rem; line-height:1.65;
+  color:#a29c92; padding:9px 0 9px 14px; border-left:2px solid #24262f;
+  animation:fade .35s ease both;
+}
+.entry.kill{color:#e79a9d; border-left-color:var(--blood-lit)}
+.entry.night{color:#7e93ad; border-left-color:#2b4058}
+.entry.day{color:#cbb78a; border-left-color:#5a4a26}
+.entry.big{color:#fff; font-family:'Cinzel',serif; letter-spacing:.06em}
+
+/* ---- roster ---- */
+.roster{display:grid; gap:8px; text-align:left; margin-bottom:24px}
+.rrow{
+  display:flex; justify-content:space-between; gap:12px; align-items:center;
+  border:1px solid var(--line); background:#0e0f15; padding:10px 12px;
+  font-family:'Special Elite',monospace; font-size:.76rem; letter-spacing:.08em;
+}
+.rrow b{font-family:'Cinzel',serif; letter-spacing:.04em; color:#efe9dc; font-weight:600}
+.rrow .rr{color:#c9585c; text-transform:uppercase}
+.rrow .rr.town{color:#8fb7d4}
+.rrow.out{opacity:.5}
+
+.foot{
+  position:relative; z-index:4; text-align:center; padding:34px 16px 42px;
+  font-family:'Special Elite',monospace; font-size:.66rem;
+  letter-spacing:.22em; text-transform:uppercase; color:#4a4740;
+}
+
+/* ---- fate notice, dossier, admin ---- */
+.fatebox{
+  font-family:'Special Elite',monospace; font-size:.78rem; line-height:1.8;
+  color:#c0a3a4; margin:0; padding:14px 16px;
+  border:1px solid #3a1d21; background:linear-gradient(#190a0c,#120a0c);
+  box-shadow:inset 0 0 26px rgba(142,17,25,.18);
+}
+.dossier{
+  text-align:left; border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+  padding:16px 4px; margin:0 0 22px;
+}
+.dossier h4{
+  font-family:'Special Elite',monospace; font-size:.64rem; letter-spacing:.24em;
+  text-transform:uppercase; color:#6f6b63; margin:0 0 6px;
+}
+.dossier p{margin:0 0 16px; font-size:.9rem; line-height:1.75; color:var(--bone-dim)}
+.dossier p:last-child{margin-bottom:0}
+.dossier .secret{color:#e0a2a4}
+
+.admin-panel{max-width:1180px; margin:20px auto 0}
+.adminrow{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:14px}
+.codein{
+  font-family:'Special Elite',monospace; font-size:.8rem; letter-spacing:.12em;
+  padding:11px 14px; color:#efe9dc; background:#0b0c11;
+  border:1px solid var(--line); outline:none; min-width:220px;
+}
+.codein:focus{border-color:var(--blood-lit); box-shadow:inset 0 0 18px rgba(194,24,31,.22)}
+.adminmsg{font-family:'Special Elite',monospace; font-size:.72rem; letter-spacing:.1em; color:#c9585c}
+.adminwho{
+  font-family:'Special Elite',monospace; font-size:.72rem; letter-spacing:.16em;
+  text-transform:uppercase; color:#8fb7d4; margin:16px 0 12px;
+}
+.subhead{
+  font-family:'Cinzel',serif; font-size:.9rem; letter-spacing:.2em;
+  text-transform:uppercase; color:#efe9dc; margin:26px 0 10px;
+  padding-bottom:8px; border-bottom:1px solid var(--line);
+}
+.rrow .code{
+  font-family:'Special Elite',monospace; letter-spacing:.14em; color:#efe9dc;
+}
+.rrow .st-open{color:#8fd4a4; text-transform:uppercase}
+.rrow .st-used{color:#c9585c; text-transform:uppercase}
+.rrow .st-live{color:#cbb78a; text-transform:uppercase}
+.rrow .st-void{color:#7c776f; text-transform:uppercase}
+.rrow .tiny{font-size:.62rem; color:#7c776f; letter-spacing:.1em}
+.rrow.stack{display:grid; grid-template-columns:1fr auto auto; gap:10px}
+.voidbtn{
+  cursor:pointer; background:transparent; border:1px solid var(--line);
+  color:#8b8579; font-family:'Special Elite',monospace; font-size:.6rem;
+  letter-spacing:.14em; text-transform:uppercase; padding:5px 8px;
+}
+.voidbtn:hover{color:#e19a9d; border-color:#5c1016}
+
+/* ---- top bar admin button ---- */
+.tagbtn{
+  font-family:'Special Elite',monospace; font-size:.7rem; letter-spacing:.16em;
+  text-transform:uppercase; cursor:pointer; padding:6px 12px;
+  color:#e7c8a0; background:linear-gradient(#241a10,#140e08);
+  border:1px solid var(--gold); transition:.2s;
+}
+.tagbtn:hover{color:#fff; background:linear-gradient(#3a2a17,#1d1409); box-shadow:0 0 18px rgba(185,151,91,.35)}
+.tagbtn.quiet{color:#9c968a; border-color:var(--line); background:#0f1016}
+.tagbtn.quiet.on{color:#8fd4a4; border-color:#2c5a3c}
+.tagbtn:focus-visible,.cta:focus-visible,.ghost:focus-visible,.choice:focus-visible,.seat:focus-visible,.sw:focus-visible,.codein:focus-visible,.voidbtn:focus-visible{
+  outline:2px solid var(--gold); outline-offset:2px;
+}
+
+/* ---- discussion ---- */
+.speechbar{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 18px}
+.speechbar:empty{display:none}
+.say{
+  cursor:pointer; font-family:'Cinzel',serif; font-size:.78rem; letter-spacing:.08em;
+  color:#e8dfd0; background:linear-gradient(#1d1f29,#12131a);
+  border:1px solid var(--line); padding:10px 14px; transition:.18s; text-align:left;
+}
+.say:hover{border-color:var(--blood-lit); color:#fff; transform:translateY(-1px)}
+.say.armed{border-color:var(--gold); color:#fff}
+.lastwords{display:flex; gap:8px; flex-wrap:wrap; margin:0 0 18px}
+.lastwords .codein{flex:1; min-width:200px}
+.entry.talk{color:#d7cdbb; border-left-color:#4a4436}
+.entry.you{color:#fff; border-left-color:var(--gold)}
+.log.short{max-height:220px; margin-top:12px}
+
+/* ---- consent + record ---- */
+.consent{
+  display:flex; gap:10px; align-items:flex-start; margin:6px 0 14px;
+  font-family:'Special Elite',monospace; font-size:.72rem; line-height:1.6; color:var(--bone-dim);
+}
+.consent input{width:16px; height:16px; accent-color:var(--blood); margin-top:2px}
+.record{
+  font-family:'Special Elite',monospace; font-size:.72rem; letter-spacing:.08em;
+  color:#8fb7d4; border:1px solid var(--line); background:#0b0c11;
+  padding:12px 14px; margin:0 0 14px; line-height:1.7;
+}
+.paused .seats{opacity:.45; pointer-events:none}
+.frozen{
+  font-family:'Special Elite',monospace; font-size:.72rem; letter-spacing:.2em;
+  text-transform:uppercase; color:#e19a9d;
+}
+
+/* ---- registration + builder ---- */
+.buildgrid{display:grid; gap:24px; grid-template-columns:minmax(0,1.35fr) minmax(0,.9fr); align-items:start}
+.formgrid{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); margin-bottom:8px}
+label.f{display:flex; flex-direction:column; gap:7px}
+label.f>span{
+  font-family:'Special Elite',monospace; font-size:.64rem; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--bone-dim);
+}
+select.codein{min-width:0; appearance:none; cursor:pointer}
+input.codein::placeholder{color:#5b5750}
+.swatches{display:flex; flex-wrap:wrap; gap:8px}
+.sw{
+  width:30px; height:30px; cursor:pointer; border:1px solid #000;
+  box-shadow:inset 0 0 8px rgba(0,0,0,.6); transition:.15s; position:relative;
+}
+.sw:hover{transform:translateY(-2px)}
+.sw.on{outline:2px solid var(--blood-lit); outline-offset:2px}
+.buildpreview{
+  text-align:center; padding:18px; border:1px solid var(--line);
+  background:radial-gradient(120% 80% at 50% 0, #1c1d26, #0b0c11 70%);
+  position:sticky; top:16px;
+}
+.previewname{
+  font-family:'Cinzel Decorative',serif; font-size:1.15rem; color:#fff;
+  margin:12px 0 6px; text-shadow:0 0 20px rgba(194,24,31,.4);
+}
+.avatar-stage{display:grid; place-items:center; min-height:230px}
+.avatar-stage svg{width:170px; height:auto; filter:drop-shadow(0 14px 22px rgba(0,0,0,.85))}
+.avatar-stage.small{min-height:150px; margin-bottom:6px}
+.avatar-stage.small svg{width:110px}
+
+/* ---- animated avatar parts ---- */
+.av-body{animation:av-breathe 3.6s ease-in-out infinite; transform-origin:50% 100%}
+.av-head{animation:av-sway 6.2s ease-in-out infinite; transform-origin:50% 100%}
+.av-eye{animation:av-blink 5.4s steps(1) infinite; transform-origin:50% 50%}
+.av-smoke{animation:av-smoke 4.2s ease-out infinite}
+@keyframes av-breathe{0%,100%{transform:scaleY(1)}50%{transform:scaleY(1.022)}}
+@keyframes av-sway{0%,100%{transform:rotate(-1.6deg)}50%{transform:rotate(1.6deg)}}
+@keyframes av-blink{0%,92%{transform:scaleY(1)}94%,97%{transform:scaleY(.08)}100%{transform:scaleY(1)}}
+@keyframes av-smoke{0%{opacity:.55; transform:translate(0,0) scale(.6)}100%{opacity:0; transform:translate(-8px,-30px) scale(1.5)}}
+@media (prefers-reduced-motion:reduce){
+  .av-body,.av-head,.av-eye,.av-smoke,.grain{animation:none}
+}
+
+/* ---- seat avatars ---- */
+.seat .face{width:auto; height:auto; padding:6px; background:radial-gradient(120% 90% at 50% 0,#191a22,#0a0a0d)}
+.seat .face svg{width:44px; height:auto; display:block}
+.seat.dead .face svg{filter:grayscale(1) brightness(.7)}
+
+@media (max-width:900px){
+  .buildgrid{grid-template-columns:1fr}
+  .buildpreview{position:static}  .grid{grid-template-columns:1fr}
+  .log{max-height:38vh}
+}
+
+/* ---------- the community centre ---------- */
+.chat{
+  max-height:30vh; min-height:150px; overflow-y:auto; margin:10px 0 10px;
+  padding:10px; border:1px solid #2a1d20; border-radius:10px;
+  background:linear-gradient(180deg,rgba(10,8,9,.72),rgba(18,14,15,.5));
+}
+.chat::-webkit-scrollbar{width:6px}
+.chat::-webkit-scrollbar-thumb{background:#332024}
+.msg{display:flex; gap:9px; align-items:flex-start; margin:0 0 9px}
+.msg .who{width:30px; height:42px; flex:0 0 30px; overflow:hidden}
+.msg .who svg{width:100%; height:100%}
+.msg .bub{
+  flex:1; background:rgba(233,227,214,.055); border:1px solid #2c2126;
+  border-radius:9px; padding:6px 9px; font-size:.86rem; color:#ded7c8; line-height:1.45;
+}
+.msg .bub .nm{display:block; font-family:'Cinzel',serif; font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; color:#b09a6a; margin-bottom:2px}
+.msg.mine .bub{background:rgba(142,17,25,.14); border-color:#4b1c22}
+.msg.system .bub{background:none; border:none; color:#8b8579; font-style:italic; padding-left:0}
+.chatbar{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px}
+.chatbar .codein{flex:1; min-width:150px}
+.ruleslist{margin:6px 0 20px; padding-left:22px; color:#cfc7b6; font-size:.94rem; line-height:1.65}
+.ruleslist li{margin-bottom:9px}
+.ruleslist b{color:#efe9dc}
+
+/* ---------- admin game history ---------- */
+.hist { gap: 8px; }
+.histrow {
+  border: 1px solid #241f1a;
+  background: linear-gradient(180deg, #16130f, #100e0b);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.histrow.open { border-color: #4a3a22; box-shadow: inset 0 0 0 1px rgba(196,150,68,.08); }
+.histhead {
+  display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap;
+}
+.histhead > span:first-child { display: flex; flex-direction: column; gap: 3px; }
+.histright { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tiny-btn { font-size: .68rem; padding: 5px 9px; }
+.histbody { margin-top: 12px; border-top: 1px dashed #2a241d; padding-top: 10px; }
+.histbody h4 { margin: 12px 0 6px; letter-spacing: .12em; text-transform: uppercase; color: #8b8579; }
+.histbody .log { max-height: 220px; }
+
+/* ---------- comfort: volume, stillness, screen readers ---------- */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px;
+  padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.vol { display: inline-flex; align-items: center; gap: 6px; }
+.vol input[type=range] { width: 74px; }
+.stilltoggle {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: .64rem; letter-spacing: .14em; text-transform: uppercase; color: #8b8579;
+}
+body.stillness *,
+body.stillness *::before,
+body.stillness *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* ---------- your will ---------- */
+.willbox { margin-top: 14px; border-top: 1px dashed #2a241d; padding-top: 10px; }
+.willbox label {
+  display: block; margin-bottom: 6px;
+  font-size: .64rem; letter-spacing: .14em; text-transform: uppercase; color: #8b8579;
+}
+.willbox textarea { width: 100%; resize: vertical; font-family: inherit; }
+
+/* ---------- the dead room ---------- */
+.ghostpanel { margin-top: 16px; border-top: 1px dashed #2a241d; padding-top: 10px; }
+.chat.ghosts { max-height: 180px; filter: saturate(.4); }
+.msg.ghost .bub {
+  background: linear-gradient(180deg, #14161c, #0e1013);
+  border-color: #26303c; color: #9fb0c0;
+}
+
+/* ---------- the ledger of play ---------- */
+.stats { gap: 6px; }
+.statline { display: grid; grid-template-columns: 1fr 120px 96px; gap: 10px; align-items: center; }
+.barwrap { height: 8px; background: #1b1712; border-radius: 999px; overflow: hidden; }
+.bar { display: block; height: 100%; background: linear-gradient(90deg, #7b1f1f, #c4453b); }
+.bar.town { background: linear-gradient(90deg, #2f5d3a, #6fae72); }
+.bar.cool { background: linear-gradient(90deg, #2b4560, #6f97c4); }
+.statline .num { text-align: right; }
+@media (max-width: 620px) {
+  .statline { grid-template-columns: 1fr; }
+  .statline .num { text-align: left; }
+}
+
+</style>
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+<div class="vignette" aria-hidden="true"></div>
+
+<header class="topbar">
+  <h1 class="brand">Cosa <span>Nostra</span></h1>
+  <div class="statusline">
+    <span id="phaseTag" class="tag">Prologue</span>
+    <span id="dayTag" class="tag muted">Night 0</span>
+    <span id="roleTag" class="tag blood">Unassigned</span>
+    <span id="clockTag" class="tag" hidden>0:00</span>
+    <span id="userTag" class="tag" hidden>&mdash;</span>
+    <button id="btnSound" class="tagbtn quiet">Sound Off</button>
+    <label class="vol" for="volume"><span class="sr-only">Volume</span>
+      <input id="volume" type="range" min="0" max="100" value="50" aria-label="Volume">
+      <output id="volOut" class="tiny">50%</output>
+    </label>
+    <label class="stilltoggle"><input type="checkbox" id="motionOff"><span>Still</span></label>
+    <button id="btnTopRules" class="tagbtn quiet">Rules</button>
+    <button id="btnTopAdmin" class="tagbtn">Admin Panel</button>
+  </div>
+</header>
+
+<div id="liveRegion" class="sr-only" role="status" aria-live="polite"></div>
+
+<main class="stage">
+
+  <!-- ===== INVITATION GATE ===== -->
+  <section id="screen-gate" class="screen active">
+    <div class="panel wide card-reveal">
+      <div class="splat" aria-hidden="true"></div>
+      <p class="kicker">By invitation only</p>
+      <h2 class="panel-title">The Door Is Locked</h2>
+      <p class="lede">Nobody walks in off the street. An admin hands out a one-use invitation &mdash; passed by message, mail, paper, however they like. It opens the door for exactly one game of Mafia. When that game ends, the code is burned and you need a fresh one.</p>
+      <div class="adminrow">
+        <input id="inviteCode" class="codein" type="text" placeholder="MAFIA-XXXX-XXXX" autocomplete="off" spellcheck="false">
+        <button id="btnInvite" class="cta small">Present Invitation</button>
+      </div>
+      <p id="inviteMsg" class="adminmsg"></p>
+    </div>
+  </section>
+
+  <!-- ===== REGISTRATION + CHARACTER BUILDER ===== -->
+  <section id="screen-profile" class="screen">
+    <div class="panel wide">
+      <div class="drip" aria-hidden="true"></div>
+      <h2 class="panel-title">Papers, Please</h2>
+      <p class="lede">The house keeps a file on everyone who sits down. Fill in your details and build the figure that walks into the room. What you cannot choose is your past &mdash; your occupation, your background, your secret and your allegiance are dealt to you.</p>
+
+      <div class="buildgrid">
+        <div class="buildform">
+          <h3 class="subhead">Your details</h3>
+          <div class="formgrid">
+            <label class="f"><span>Game username *</span><input id="pfUser" class="codein" maxlength="18" autocomplete="off" spellcheck="false"></label>
+            <label class="f"><span>Country *</span><input id="pfCountry" class="codein" maxlength="32" autocomplete="off"></label>
+            <label class="f"><span>Pronouns</span>
+              <select id="pfPronoun" class="codein">
+                <option>they/them</option><option>she/her</option><option>he/him</option><option>prefer not to say</option>
+              </select>
+            </label>
+            <label class="consent wide-field"><input type="checkbox" id="pfAdult"><span>I am 18 or over. *</span></label>
+          </div>
+
+          <h3 class="subhead">Your figure</h3>
+          <div class="formgrid">
+            <label class="f"><span>Body</span>
+              <select id="pfBuild" class="codein"><option>Slim</option><option selected>Average</option><option>Broad</option></select>
+            </label>
+            <label class="f"><span>Hairstyle</span>
+              <select id="pfHair" class="codein">
+                <option value="short">Short</option><option value="slick">Slicked back</option>
+                <option value="curls">Curls</option><option value="long">Long</option>
+                <option value="bun">Bun</option><option value="ponytail">Ponytail</option>
+                <option value="braids">Braids</option><option value="afro">Afro</option>
+                <option value="buzz">Buzzed</option><option value="bald">Bald</option>
+              </select>
+            </label>
+            <label class="f"><span>Facial hair</span>
+              <select id="pfBeard" class="codein">
+                <option value="none">Clean shaven</option><option value="stubble">Stubble</option>
+                <option value="moustache">Moustache</option><option value="goatee">Goatee</option>
+                <option value="full">Full beard</option><option value="sideburns">Sideburns</option>
+              </select>
+            </label>
+            <label class="f"><span>Headwear</span>
+              <select id="pfHat" class="codein">
+                <option value="none">None</option><option value="fedora">Fedora</option>
+                <option value="homburg">Homburg</option><option value="flatcap">Flat cap</option>
+                <option value="beret">Beret</option><option value="scarf">Headscarf</option>
+                <option value="veil">Mourning veil</option>
+              </select>
+            </label>
+            <label class="f"><span>Outfit</span>
+              <select id="pfOutfit" class="codein">
+                <option value="suit">Pinstripe suit</option><option value="dress">Evening dress</option>
+                <option value="coat">Long coat</option><option value="vest">Shirt and waistcoat</option>
+                <option value="work">Work clothes</option><option value="uniform">Uniform</option>
+              </select>
+            </label>
+            <label class="f"><span>Shoes</span>
+              <select id="pfShoes" class="codein">
+                <option value="oxford">Oxfords</option><option value="boot">Boots</option>
+                <option value="heel">Heels</option><option value="sandal">Sandals</option>
+              </select>
+            </label>
+            <label class="f"><span>Accent</span>
+              <select id="pfProp" class="codein">
+                <option value="none">Nothing</option><option value="cigar">Cigarette</option>
+                <option value="pipe">Pipe</option><option value="glasses">Glasses</option>
+                <option value="sunglasses">Dark glasses</option><option value="monocle">Monocle</option>
+                <option value="eyepatch">Eye patch</option><option value="scar">Scar</option>
+                <option value="rose">Rose</option>
+              </select>
+            </label>
+            <label class="f"><span>One more detail</span>
+              <select id="pfExtra" class="codein">
+                <option value="none">Nothing</option><option value="earrings">Earrings</option>
+                <option value="necklace">Necklace</option><option value="watch">Wristwatch</option>
+                <option value="gloves">Leather gloves</option><option value="freckles">Freckles</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="field">
+            <label>Skin tone</label>
+            <div class="swatches" id="swSkin"></div>
+          </div>
+          <div class="field">
+            <label>Hair colour</label>
+            <div class="swatches" id="swHair"></div>
+          </div>
+          <div class="field">
+            <label>Eye colour</label>
+            <div class="swatches" id="swEye"></div>
+          </div>
+          <div class="field">
+            <label>Lip tone</label>
+            <div class="swatches" id="swLip"></div>
+          </div>
+          <div class="field">
+            <label>Clothing colour</label>
+            <div class="swatches" id="swCloth"></div>
+          </div>
+          <div class="field">
+            <label>Trim colour</label>
+            <div class="swatches" id="swTrim"></div>
+          </div>
+
+          <h3 class="subhead">Consent &amp; your record</h3>
+          <p class="finehint">The house asks for as little as possible: a username, a country and your word that you are an adult. No real name, no date of birth, no address. What little there is stays in this browser &mdash; nothing is uploaded anywhere &mdash; and the two admins can see it while a game is running. You can erase it at any time.</p>
+          <label class="consent"><input type="checkbox" id="pfConsent"><span>I agree to the house keeping this file while I play.</span></label>
+          <div id="pfRecord" class="record"></div>
+          <button id="btnForget" class="ghost small">Erase My Details</button>
+        </div>
+
+        <div class="buildpreview">
+          <div id="avatarBig" class="avatar-stage"></div>
+          <p id="pfName" class="previewname">&mdash;</p>
+          <p class="finehint">Your figure breathes, blinks and shifts on its own. Occupation, background and secret are dealt at the table &mdash; not here.</p>
+          <button id="btnRandomLook" class="ghost small">Surprise Me</button>
+        </div>
+      </div>
+
+      <p id="pfMsg" class="adminmsg"></p>
+      <button id="btnProfile" class="cta">File My Papers</button>
+    </div>
+  </section>
+
+  <!-- ===== THE RULES ===== -->
+  <section id="screen-rules" class="screen">
+    <div class="panel wide">
+      <div class="drip" aria-hidden="true"></div>
+      <p class="kicker">Read this before you sit down</p>
+      <h2 class="panel-title">The Rules Of The House</h2>
+      <p class="lede">Three kinds of people are dealt into this game: <b>one Mafia</b>, <b>one Nurse</b>, and <b>everybody else is a civilian</b>. Nobody picks. Nobody is told who anyone is. As far as the room is concerned, every single person is just a civilian.</p>
+
+      <ol class="ruleslist">
+        <li><b>Four people minimum.</b> Any game needs at least four at the table. Bigger tables simply mean more civilians &mdash; there is still only ever one Mafia and one Nurse.</li>
+        <li><b>The deal is random and secret.</b> When the game starts you are handed Mafia, Nurse or civilian by chance. Only you see your own card.</li>
+        <li><b>Nobody knows anybody.</b> The Mafia does not know who the Nurse is. The Nurse does not know who the Mafia is. Civilians know nothing at all. Everyone at the table looks like a civilian.</li>
+        <li><b>At night the Mafia kills one person.</b> Anyone at the table &mdash; a civilian, or the Nurse.</li>
+        <li><b>At night the Nurse saves one person.</b> The Nurse is never told who was attacked, so the save is a guess. Guess right and that person walks away from it. Guess wrong and the person the Mafia chose is dead &mdash; nothing can undo it.</li>
+        <li><b>The Nurse can save herself.</b> That is the whole problem: the night she spends protecting her own skin is a night nobody else is covered, and the night she covers someone else may be the night the Mafia comes for her.</li>
+        <li><b>By day everyone meets in the community centre.</b> Everybody talks &mdash; and that includes the Mafia and the Nurse, sitting there pretending to be as lost as everyone else.</li>
+        <li><b>Then the room votes.</b> Whoever gets the most hands is dragged out and hanged, guilty or not. A tie is argued out at the table.</li>
+        <li><b>How it ends.</b> Civilians win the moment the Mafia is hanged. The Mafia wins when there is nobody left to stop them.</li>
+        <li><b>The administrators.</b> Two admins hold the sealed records and can see who everyone really is, at any time, without anyone at the table being told. Inside the game they appear only as Admin 1 and Admin 2 &mdash; their own names are never shown.</li>
+      </ol>
+
+      <label class="consent"><input type="checkbox" id="rulesOK"><span>I have read the rules and I know what I am walking into.</span></label>
+      <p id="rulesMsg" class="adminmsg"></p>
+      <button id="btnRules" class="cta">I Know The Rules</button>
+    </div>
+  </section>
+
+  <!-- ===== SETUP ===== -->
+  <section id="screen-setup" class="screen">
+    <div class="panel wide">
+      <h2 class="panel-title">The Family Is Rotten</h2>
+      <p class="lede">Someone at this table is loading a pistol under the tablecloth. Talk. Accuse. Survive until dawn &mdash; or make sure nobody else does.</p>
+
+      <div class="field">
+        <label for="townSize">Souls at the table</label>
+        <div class="rowflex">
+          <input type="range" id="townSize" min="4" max="14" value="8">
+          <output id="townSizeOut" class="numout">8</output>
+        </div>
+        <p class="finehint">Four is the smallest game the house allows. However many sit down, there is one Mafia, one Nurse, and the rest are civilians.</p>
+      </div>
+
+      <div class="field">
+        <label>Which side do you take?</label>
+        <p class="fatebox">Nobody chooses. The envelopes are sealed and dealt by fate &mdash; Mafia, Nurse or civilian is decided the moment you sit down, and only the two admins may look at the deal.</p>
+      </div>
+
+      <div class="field">
+        <label>How sharp are the others?</label>
+        <div class="choices" id="diffChoices">
+          <button class="choice" data-diff="0.55">Drunks</button>
+          <button class="choice selected" data-diff="0.85">Wiseguys</button>
+          <button class="choice" data-diff="1">Made men</button>
+        </div>
+      </div>
+
+      <button id="btnStart" class="cta">Sit Down At The Table</button>
+      <p class="finehint">Night: the Mafia picks someone to kill, the Nurse picks someone to save, blind. Day: everyone meets in the community centre, talks, then votes somebody out. Wiseguys is the honest setting &mdash; and roughly one Mafia in three never slips up at all.</p>
+    </div>
+  </section>
+
+  <!-- ===== ROLE REVEAL ===== -->
+  <section id="screen-reveal" class="screen">
+    <div class="panel card-reveal">
+      <div class="splat" aria-hidden="true"></div>
+      <p class="kicker">Your envelope</p>
+      <div id="revealAvatar" class="avatar-stage small"></div>
+      <h2 id="revealRole" class="role-name">&mdash;</h2>
+      <p id="revealTeam" class="team-line">&mdash;</p>
+      <p id="revealDesc" class="role-desc">&mdash;</p>
+      <div id="revealStory" class="dossier"></div>
+      <div id="revealAllies" class="allies"></div>
+      <button id="btnBegin" class="cta">Burn The Envelope</button>
+    </div>
+  </section>
+
+  <!-- ===== GAME ===== -->
+  <section id="screen-game" class="screen">
+    <div class="grid">
+      <div class="panel table-panel">
+        <div class="drip" aria-hidden="true"></div>
+        <h2 class="panel-title small" id="tableTitle">The Table</h2>
+        <p class="prompt" id="actionPrompt" aria-live="polite">&nbsp;</p>
+        <div id="speechbar" class="speechbar" role="group" aria-label="What you say to the room"></div>
+        <div id="lastWords" class="lastwords" hidden>
+          <input id="lastWordsIn" class="codein" maxlength="90" placeholder="Your last words to the room…" autocomplete="off">
+          <button id="btnLastWords" class="ghost small">Speak</button>
+        </div>
+        <div id="seats" class="seats" role="group" aria-label="Everyone at the table"></div>
+        <div class="willbox">
+          <label for="willIn">Your will &mdash; read out to the room if you die</label>
+          <textarea id="willIn" class="codein" maxlength="180" rows="2" placeholder="Whatever you want the room to know when you are gone…"></textarea>
+          <p id="willNote" class="tiny">Left blank for now.</p>
+        </div>
+        <div class="actionbar">
+          <button id="btnConfirm" class="cta small" disabled>Confirm</button>
+          <button id="btnSkip" class="ghost small">Abstain</button>
+        </div>
+      </div>
+
+      <div class="panel log-panel">
+        <div class="drip" aria-hidden="true"></div>
+        <h2 class="panel-title small">The Community Centre</h2>
+        <p class="finehint">Everyone talks here &mdash; civilians, the Nurse and the Mafia alike.</p>
+        <div id="chat" class="chat" aria-live="polite"></div>
+        <div class="chatbar">
+          <input id="chatIn" class="codein" maxlength="140" placeholder="Say something to the room…" autocomplete="off">
+          <button id="btnSay" class="ghost small">Say</button>
+          <button id="btnCallVote" class="cta small">Call The Vote</button>
+        </div>
+        <div id="ghostpanel" class="ghostpanel" hidden>
+          <h2 class="panel-title small">The Dead Room</h2>
+          <p class="finehint">You are out. Talk all you like here &mdash; the living cannot hear a word of it, and you have no vote.</p>
+          <div id="ghostchat" class="chat ghosts" aria-live="polite"></div>
+          <div class="chatbar">
+            <input id="ghostIn" class="codein" maxlength="140" placeholder="Say it to the other dead…" autocomplete="off">
+            <button id="btnGhostSay" class="ghost small">Whisper</button>
+          </div>
+        </div>
+
+        <h2 class="panel-title small">Word On The Street</h2>
+        <div id="log" class="log" aria-live="polite"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== ADMIN CONSOLE ===== -->
+  <section id="screen-admin" class="screen">
+    <div class="panel wide">
+      <div class="drip" aria-hidden="true"></div>
+      <h2 class="panel-title small">Sealed Records &mdash; Admin Only</h2>
+      <p class="finehint">Two admins hold the keys. Inside the house they are only ever Admin 1 and Admin 2 &mdash; their real names are never stored or printed.</p>
+      <div id="adminGate" class="adminrow">
+        <input id="adminCode" class="codein" type="password" placeholder="Admin passphrase" autocomplete="off">
+        <button id="btnAdmin" class="ghost small">Unseal</button>
+        <span id="adminMsg" class="adminmsg"></span>
+      </div>
+
+      <div id="adminBody" hidden>
+        <p id="adminWho" class="adminwho"></p>
+
+        <h3 class="subhead">Invitations</h3>
+        <div class="adminrow">
+          <button id="btnMakeInvite" class="cta small">Write A New Invitation</button>
+          <button id="btnCopyInvite" class="ghost small">Copy Invitation + Link</button>
+          <span id="inviteOut" class="adminmsg"></span>
+        </div>
+        <div id="inviteList" class="roster"></div>
+
+        <h3 class="subhead">The Deal</h3>
+        <div id="adminRoster" class="roster"></div>
+
+        <h3 class="subhead">Game History</h3>
+        <p class="finehint">Every finished session is filed here — who was dealt what, who died, and everything that was said in the community centre. Players never see this page.</p>
+        <div class="adminrow">
+          <button id="btnHistOpen" class="ghost small">Open Every Transcript</button>
+          <button id="btnHistText" class="ghost small">Readable Transcript</button>
+          <button id="btnHistExport" class="ghost small">Hand Over The Data</button>
+          <button id="btnHistClear" class="ghost small">Burn The Archive</button>
+          <span id="histMsg" class="adminmsg"></span>
+        </div>
+        <p id="histCount" class="tiny"></p>
+        <div id="adminHistory" class="roster hist"></div>
+
+        <h3 class="subhead">The Ledger Of Play</h3>
+        <p class="finehint">Counted from the archived sessions above.</p>
+        <div id="adminStats" class="roster stats"></div>
+
+        <h3 class="subhead">Who Did What</h3>
+        <p class="finehint">Every unsealing, invitation and freeze, so the two of you can see each other&rsquo;s work.</p>
+        <div id="adminAudit" class="roster"></div>
+
+        <h3 class="subhead">Moderation</h3>
+        <div class="adminrow">
+          <button id="btnPause" class="ghost small">Freeze The Room</button>
+          <span id="modMsg" class="adminmsg"></span>
+        </div>
+        <div id="adminLog" class="log short"></div>
+
+        <div class="actionbar">
+          <button id="btnAdminBack" class="ghost small">Back</button>
+          <button id="btnAdminOut" class="ghost small">Reseal Records</button>
+        </div>
+      </div>
+      <div id="adminBackOnly" class="actionbar">
+        <button id="btnAdminBack2" class="ghost small">Back</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== END ===== -->
+  <section id="screen-end" class="screen">
+    <div class="panel card-reveal">
+      <div class="splat big" aria-hidden="true"></div>
+      <p class="kicker">Curtain</p>
+      <h2 id="endTitle" class="role-name">&mdash;</h2>
+      <p id="endSub" class="team-line">&mdash;</p>
+      <div id="endRoster" class="roster"></div>
+      <button id="btnAgain" class="cta">Present A New Invitation</button>
+      <p class="finehint">That invitation is burned. Ask an admin for another to sit down again.</p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">Fiction. No real families were harmed.</footer>
+
+<script>
+/* ============================================================
+   COSA NOSTRA - a single-player Mafia (Werewolf) simulator
+   All logic runs locally in the browser. No network calls.
+   ============================================================ */
+
+/* ---------- helpers ---------- */
+const $ = (id) => document.getElementById(id);
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const shuffle = (a) => { const c = a.slice(); for (let i = c.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [c[i], c[j]] = [c[j], c[i]]; } return c; };
+
+/* ---------- procedural cast: a new set of faces every single game ---------- */
+const FIRST = ['Salvatore','Vittoria','Nico','Enzo','Rosa','Marco','Ilaria','Bruno','Agnese','Luca','Dario','Chiara','Ottavio','Salvo','Elena','Gaspare','Mirella','Tullio','Renata','Cosimo','Perla','Ignazio','Serafina','Alfio','Livia','Vincenzo','Assunta','Gennaro','Fiorella','Silvio'];
+const LAST = ['Riina','Greco','Barone','Marchetti','Lombardi','Fusco','Costa','Verga','Prati','Amato','Sesta','Moretti','Renzi','Pinto','Bruni','Fanucci','Scala','Zappala','Cutolo','Mazzeo','Orsini','Tagliani','Bevilacqua','Sciacca','Falcone','Grimaldi','Ruggeri','Vitale','Palladino','Serra'];
+const NICK = ['The Widow','Toothpick','Cinders','The Ledger','Knuckles','Ghost','Butcher','Doc','Radio','Iron','Half-Moon','The Priest','Ash','Two Coats','Sugar','Nightingale','Cold Hands','The Nail','Rosary','Quiet','Piano','Little Wolf','Sparrow','The Tailor','Salt'];
+const FACES = ['\uD83C\uDFA9','\uD83D\uDD70\uFE0F','\uD83E\uDD44','\u271D\uFE0F','\uD83D\uDD25','\uD83D\uDCD2','\uD83C\uDFB7','\uD83E\uDD4A','\uD83E\uDDF6','\uD83C\uDF2B\uFE0F','\uD83D\uDD2A','\uD83D\uDCF0','\uD83E\uDE79','\uD83D\uDCFB','\u265B','\uD83C\uDF77','\uD83C\uDCCF','\uD83D\uDD11','\uD83E\uDDF5','\u2615','\uD83D\uDCBC','\uD83D\uDD6F\uFE0F','\uD83C\uDFAD','\u2693','\uD83C\uDF39'];
+const TRAIT = [
+  'speaks in proverbs and buries the meaning','wears black for husbands they outlived','never stops chewing, never stops watching',
+  'hears every confession and forgets none','three warehouses burned, no charges filed','knows what every man at the table owes',
+  'plays the club until dawn and hears the deals','settles arguments before they finish','sits by the window and misses nothing',
+  'no photograph of them exists','keeps the shop open at odd hours','carries a notebook nobody is allowed to read',
+  'stitches men who cannot see a hospital','hears rumours before they happen','runs the docks and fears nobody',
+  'counts the collar money out loud','laughs a beat too late at every joke','always the last to leave the room'
+];
+
+/* the mystery that frames each game */
+const MYSTERY = [
+  'the night the harbour ledger vanished from the sacristy',
+  'the fire that took the Fusco warehouse and two watchmen with it',
+  'the wedding at San Cataldo where the champagne came back poisoned',
+  'the missing shipment of Turkish tobacco and the boy who signed for it',
+  'the bishop\u2019s ring pawned three streets from the cathedral',
+  'the shot fired during the blackout at the Teatro Vecchio'
+];
+const PUBLIC_BIT = [
+  'was seen at the docks an hour before it happened','arrived at the wake with fresh plaster dust on their cuffs',
+  'paid off a debt that morning in old, damp banknotes','borrowed a car and returned it washed',
+  'cancelled a standing appointment for the first time in nine years','was heard arguing behind the kitchen door',
+  'signed the register in a hand that does not match their own','left the funeral before the coffin was closed'
+];
+const SECRET_BIT = [
+  'you already burned a letter that mentioned your name','you owe money to someone at this table and they have stopped asking politely',
+  'you were somewhere you can never admit to being','you moved a body once and it was not this one',
+  'you kept a key you were told to hand back','you saw a face at the window and said nothing',
+  'you have been passing names to a man in a grey hat','you lied to the priest, on the record, twice'
+];
+const SUSPECT_BIT = [
+  'someone at this table smelled of lamp oil that night','one of them has a coat with a torn lining that matches a scrap of cloth',
+  'the same person is always awake when the bells ring three','one of them repeats their alibi word for word, like a rehearsed line',
+  'someone flinched when the harbour was mentioned','one of them is far too calm for a person with nothing to hide'
+];
+const DEATH_CLUE = [
+  'a pawn ticket, folded four times, tucked in the lining','a chapel key that opens nothing in this parish',
+  'a photograph with one face scratched out','the smell of lamp oil on both sleeves',
+  'a debt note initialled by a hand nobody claims','a train ticket bought for tomorrow, one way',
+  'a rosary with three beads missing','half a torn banknote, the other half still out there'
+];
+
+const OCCUPATION = [
+  'harbour clerk','undertaker','tailor to three families','olive oil exporter','night pharmacist',
+  'card dealer at the Colonna','ambulance driver','fishmonger','organ tuner at the cathedral',
+  'seamstress for the opera house','debt collector','bookbinder','bank teller','tram conductor',
+  'photographer for hire','vineyard foreman','locksmith','midwife','courthouse typist','baker before dawn'
+];
+
+function buildCast(n) {
+  const firsts = shuffle(FIRST), lasts = shuffle(LAST), nicks = shuffle(NICK);
+  const faces = shuffle(FACES), traits = shuffle(TRAIT);
+  const pubs = shuffle(PUBLIC_BIT), secs = shuffle(SECRET_BIT), sus = shuffle(SUSPECT_BIT), dc = shuffle(DEATH_CLUE);
+  const jobs = shuffle(OCCUPATION);
+  const cast = [];
+  for (let i = 0; i < n; i++) {
+    const nick = Math.random() < 0.4 ? `\u201C${nicks[i % nicks.length]}\u201D ` : '';
+    cast.push({
+      name: `${firsts[i % firsts.length]} ${nick}${lasts[i % lasts.length]}`,
+      face: faces[i % faces.length],
+      trait: traits[i % traits.length],
+      job: jobs[i % jobs.length],
+      look: randomLook(),
+      publicClue: pubs[i % pubs.length],
+      secret: secs[i % secs.length],
+      suspicion: sus[i % sus.length],
+      deathClue: dc[i % dc.length]
+    });
+  }
+  return cast;
+}
+
+/* ============================================================
+   ANIMATED CHARACTER FIGURES (inline SVG, CSS-animated)
+   ============================================================ */
+const SKINS  = ['#f6d5bd','#eec39d','#d9a577','#c08553','#a06a3f','#7d4f2c','#5c3a20','#3f2717'];
+const HAIRS  = ['#120e0c','#2b1b12','#4a2c17','#7b4a1e','#b07b3a','#d9c08a','#8d8d92','#e6e2dc','#5c1016','#2a3a56'];
+const CLOTHS = ['#1b1d26','#2a2d3a','#3d2530','#12232e','#2f2a1c','#4b070c','#1f3327','#3a3a3a','#55283a','#0f1b2b'];
+const TRIMS  = ['#b9975b','#8e1119','#d8d2c4','#6f8fae','#7a9a6b','#c2181f','#e0c9a6','#5a5f72'];
+
+const HAIR_STYLES = ['short','slick','curls','long','bun','buzz','bald','afro','ponytail','braids'];
+const HATS = ['none','none','none','none','fedora','flatcap','veil','beret','scarf','homburg'];
+const OUTFITS = ['suit','dress','coat','vest','work','uniform'];
+const SHOES = ['oxford','boot','heel','sandal'];
+const PROPS = ['none','none','none','cigar','glasses','scar','rose','sunglasses','pipe','monocle','eyepatch'];
+const EXTRAS = ['none','none','none','earrings','necklace','watch','gloves','freckles','glasses'];
+const BEARDS = ['none','none','none','stubble','moustache','goatee','full','sideburns'];
+const LIPS = ['#7d3b3b','#8e4a4a','#5d2f2c','#a3524f','#6b3a44'];
+const BUILDS = ['Slim','Average','Broad'];
+
+function randomLook() {
+  return {
+    skin: pick(SKINS), hair: pick(HAIRS), cloth: pick(CLOTHS), trim: pick(TRIMS),
+    eyeCol: pick(EYE_COLOURS), lip: pick(LIPS),
+    hairStyle: pick(HAIR_STYLES), hat: pick(HATS), outfit: pick(OUTFITS),
+    shoes: pick(SHOES), prop: pick(PROPS), extra: pick(EXTRAS),
+    beard: pick(BEARDS), build: pick(BUILDS)
+  };
+}
+
+/* ============================================================
+   THE FIGURE
+   A hand-built SVG person: shaded skin, real facial features,
+   hair, headwear, facial hair, clothing, shoes and trinkets.
+   Everything is drawn in code \u2014 no images, no downloads.
+   ============================================================ */
+let AV_ID = 0;
+
+const EYE_COLOURS = ['#3b2a1c', '#6b4a24', '#2f4f5e', '#3d5c3a', '#5c4b6b', '#1b1b22'];
+
+function shade(hex, amt) {
+  const h = String(hex).replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
+  const cl = (v) => Math.max(0, Math.min(255, Math.round(v)));
+  const r = cl(((n >> 16) & 255) + amt), g = cl(((n >> 8) & 255) + amt), b = cl((n & 255) + amt);
+  return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
+}
+
+function avatarParts(o) {
+  const id = 'av' + (AV_ID++);
+  const w = o.build === 'Broad' ? 1.18 : o.build === 'Slim' ? 0.84 : 1;
+  const sw = 26 * w;
+  const skin = o.skin || '#c98d63';
+  const hair = o.hair || '#241a14';
+  const cloth = o.cloth || '#20222b';
+  const trim = o.trim || '#8e1119';
+  const eye = o.eyeCol || '#3b2a1c';
+  const dark = '#0a0a0d';
+  const skinDeep = shade(skin, -46);
+  const skinLift = shade(skin, 30);
+  const hairLift = shade(hair, 34);
+  const clothLift = shade(cloth, 26);
+  const clothDeep = shade(cloth, -26);
+
+  const defs = `<defs>
+    <radialGradient id="${id}f" cx="38%" cy="30%" r="78%">
+      <stop offset="0" stop-color="${skinLift}"/><stop offset=".62" stop-color="${skin}"/><stop offset="1" stop-color="${skinDeep}"/>
+    </radialGradient>
+    <linearGradient id="${id}c" x1="0" y1="0" x2=".9" y2="1">
+      <stop offset="0" stop-color="${clothLift}"/><stop offset=".55" stop-color="${cloth}"/><stop offset="1" stop-color="${clothDeep}"/>
+    </linearGradient>
+    <linearGradient id="${id}h" x1="0" y1="0" x2=".6" y2="1">
+      <stop offset="0" stop-color="${hairLift}"/><stop offset="1" stop-color="${hair}"/>
+    </linearGradient>
+    <linearGradient id="${id}s" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3ece0"/><stop offset="1" stop-color="#cfc7b8"/>
+    </linearGradient>
+  </defs>`;
+
+  /* ---------- clothing ---------- */
+  const cg = `url(#${id}c)`;
+  let body = '';
+  if (o.outfit === 'dress') {
+    body = `<path d="M${60 - sw} 86 Q60 78 ${60 + sw} 86 L${60 + sw + 13} 150 Q60 158 ${60 - sw - 13} 150 Z" fill="${cg}"/>
+      <path d="M${60 - sw + 2} 86 Q60 102 ${60 + sw - 2} 86 Q60 96 ${60 - sw + 2} 86 Z" fill="${skin}"/>
+      <path d="M${60 - sw - 1} 112 Q60 120 ${60 + sw + 1} 112" stroke="${trim}" stroke-width="3" fill="none" opacity=".9"/>`;
+  } else if (o.outfit === 'coat') {
+    body = `<path d="M${60 - sw} 86 Q60 79 ${60 + sw} 86 L${60 + sw - 1} 152 L${60 - sw + 1} 152 Z" fill="${cg}"/>
+      <path d="M${60 - sw + 3} 86 L60 116 L${60 + sw - 3} 86 L${60 + sw - 11} 86 L60 104 L${60 - sw + 11} 86 Z" fill="${clothLift}"/>
+      <path d="M60 104 L60 152" stroke="${dark}" stroke-width="2.4" opacity=".6"/>
+      <g fill="${shade(trim, -10)}"><circle cx="53" cy="118" r="1.9"/><circle cx="53" cy="130" r="1.9"/><circle cx="67" cy="118" r="1.9"/><circle cx="67" cy="130" r="1.9"/></g>
+      <path d="M${60 - sw} 86 q6 6 6 14" stroke="${dark}" stroke-width="1" fill="none" opacity=".4"/>`;
+  } else if (o.outfit === 'vest') {
+    body = `<path d="M${60 - sw} 86 Q60 79 ${60 + sw} 86 L${60 + sw - 3} 136 L${60 - sw + 3} 136 Z" fill="url(#${id}s)"/>
+      <path d="M${60 - sw + 3} 87 L53 136 L${60 - sw + 13} 136 Z" fill="${cg}"/>
+      <path d="M${60 + sw - 3} 87 L67 136 L${60 + sw - 13} 136 Z" fill="${cg}"/>
+      <path d="M60 96 L65 110 L60 116 L55 110 Z" fill="${trim}"/>
+      <g fill="${shade(cloth, 60)}"><circle cx="60" cy="122" r="1.6"/><circle cx="60" cy="130" r="1.6"/></g>`;
+  } else if (o.outfit === 'work') {
+    body = `<path d="M${60 - sw} 86 Q60 79 ${60 + sw} 86 L${60 + sw - 4} 134 L${60 - sw + 4} 134 Z" fill="${cg}"/>
+      <rect x="${60 - sw + 6}" y="108" width="${sw * 2 - 12}" height="5" rx="2" fill="${dark}" opacity=".55"/>
+      <rect x="${60 - sw + 5}" y="90" width="10" height="13" rx="1.5" fill="${clothDeep}"/>
+      <path d="M${60 - sw + 3} 86 L60 100 L${60 + sw - 3} 86" stroke="${clothLift}" stroke-width="3" fill="none"/>
+      <path d="M52 118 q8 4 16 0" stroke="${dark}" stroke-width="1" fill="none" opacity=".35"/>`;
+  } else if (o.outfit === 'uniform') {
+    body = `<path d="M${60 - sw} 86 Q60 79 ${60 + sw} 86 L${60 + sw - 2} 140 L${60 - sw + 2} 140 Z" fill="${cg}"/>
+      <path d="M${60 - sw + 4} 86 L60 108 L${60 + sw - 4} 86" stroke="${clothLift}" stroke-width="4" fill="none"/>
+      <g fill="${shade(trim, 40)}"><circle cx="52" cy="110" r="2"/><circle cx="52" cy="122" r="2"/><circle cx="68" cy="110" r="2"/><circle cx="68" cy="122" r="2"/></g>
+      <rect x="${60 - sw + 1}" y="90" width="11" height="4" rx="1" fill="${trim}"/>
+      <rect x="${60 + sw - 12}" y="90" width="11" height="4" rx="1" fill="${trim}"/>`;
+  } else {
+    /* suit */
+    body = `<path d="M${60 - sw} 86 Q60 79 ${60 + sw} 86 L${60 + sw - 3} 140 L${60 - sw + 3} 140 Z" fill="${cg}"/>
+      <path d="M${60 - sw + 6} 86 L60 114 L${60 + sw - 6} 86 L${60 + sw - 13} 86 L60 101 L${60 - sw + 13} 86 Z" fill="url(#${id}s)"/>
+      <path d="M60 101 L66 116 L60 123 L54 116 Z" fill="${trim}"/>
+      <path d="M60 123 L60 138" stroke="${shade(trim, -40)}" stroke-width="3"/>
+      <path d="M${60 - sw + 6} 86 L60 114" stroke="${clothLift}" stroke-width="1.6" fill="none" opacity=".8"/>
+      <path d="M${60 + sw - 6} 86 L60 114" stroke="${clothLift}" stroke-width="1.6" fill="none" opacity=".8"/>
+      <rect x="${60 + sw - 15}" y="104" width="9" height="3" fill="#efe6d6" opacity=".8"/>`;
+  }
+
+  /* ---------- legs, shoes ---------- */
+  const legTop = o.outfit === 'dress' ? 150 : o.outfit === 'coat' ? 152 : o.outfit === 'work' ? 134 : 140;
+  const legs = o.outfit === 'dress'
+    ? `<rect x="52" y="150" width="6" height="10" rx="3" fill="${shade(skin, -12)}"/><rect x="62" y="150" width="6" height="10" rx="3" fill="${shade(skin, -12)}"/>`
+    : `<rect x="51" y="${legTop}" width="7.5" height="${160 - legTop}" rx="2" fill="${clothDeep}"/><rect x="61.5" y="${legTop}" width="7.5" height="${160 - legTop}" rx="2" fill="${clothDeep}"/>`;
+  const shoe = o.shoes === 'heel'
+    ? `<path d="M47 160 h13 v4 h-4 l-2 5 h-2.4 z" fill="${dark}"/><path d="M60 160 h13 v4 h-4 l-2 5 h-2.4 z" fill="${dark}"/>`
+    : o.shoes === 'boot'
+      ? `<path d="M46 154 h14 v10 h-14 z" fill="#2a1d15"/><path d="M60 154 h14 v10 h-14 z" fill="#2a1d15"/><rect x="45" y="162" width="16" height="3" rx="1" fill="#120c08"/><rect x="59" y="162" width="16" height="3" rx="1" fill="#120c08"/>`
+      : o.shoes === 'sandal'
+        ? `<path d="M46 161 h14 v3 h-14 z" fill="#6b4a2c"/><path d="M60 161 h14 v3 h-14 z" fill="#6b4a2c"/>`
+        : `<path d="M45 158 q8 -3 15 0 v4 q-8 3 -15 0 z" fill="${dark}"/><path d="M60 158 q8 -3 15 0 v4 q-8 3 -15 0 z" fill="${dark}"/><path d="M46 160 h13" stroke="#fff" stroke-width=".6" opacity=".15"/>`;
+
+  /* ---------- arms ---------- */
+  const sleeve = o.outfit === 'dress' ? shade(skin, -8) : cg;
+  const arms = `<g class="av-arm-l"><rect x="${60 - sw - 6}" y="88" width="8" height="38" rx="4" fill="${sleeve}"/>
+      <rect x="${60 - sw - 6}" y="120" width="8" height="4" fill="#efe6d6" opacity="${o.outfit === 'dress' ? 0 : 0.85}"/>
+      <circle cx="${60 - sw - 2}" cy="129" r="4.4" fill="${skin}"/></g>
+    <g class="av-arm-r"><rect x="${60 + sw - 2}" y="88" width="8" height="38" rx="4" fill="${sleeve}"/>
+      <rect x="${60 + sw - 2}" y="120" width="8" height="4" fill="#efe6d6" opacity="${o.outfit === 'dress' ? 0 : 0.85}"/>
+      <circle cx="${60 + sw + 2}" cy="129" r="4.4" fill="${skin}"/></g>`;
+
+  return { id, defs, body, legs, shoe, arms, skin, skinDeep, skinLift, hair, hairLift, trim, cloth, cg, clothLift, clothDeep, eye, dark, w, sw };
+}
+
+/* the head: bone structure, then features, then hair on top */
+function faceArt(o, P) {
+  const { skin, skinDeep, skinLift, hair, hairLift, eye, trim, dark, id } = P;
+  const brow = shade(hair, -14);
+  const lip = o.lip || shade(skin, -70);
+
+  const head = `
+    <path d="M60 30 c11.5 0 19.5 8.6 19.5 20.5 c0 7.4 -1.4 12.6 -4.2 17.6 c-3.1 5.6 -8.9 9.6 -15.3 9.6 c-6.4 0 -12.2 -4 -15.3 -9.6 c-2.8 -5 -4.2 -10.2 -4.2 -17.6 C40.5 38.6 48.5 30 60 30 Z" fill="url(#${id}f)"/>
+    <path d="M44 54 q-4 0 -4 5 q0 5 5 5" fill="${skin}" stroke="${skinDeep}" stroke-width=".7"/>
+    <path d="M76 54 q4 0 4 5 q0 5 -5 5" fill="${skin}" stroke="${skinDeep}" stroke-width=".7"/>
+    <path d="M42.6 57 q1.6 1.4 1 4" stroke="${skinDeep}" stroke-width=".7" fill="none" opacity=".8"/>
+    <path d="M77.4 57 q-1.6 1.4 -1 4" stroke="${skinDeep}" stroke-width=".7" fill="none" opacity=".8"/>
+    <path d="M47 62 q3 8 13 8 q10 0 13 -8 q-4 12 -13 12 q-9 0 -13 -12 z" fill="${skinDeep}" opacity=".22"/>
+    <ellipse cx="49" cy="58" rx="4" ry="2.6" fill="${trim}" opacity=".12"/>
+    <ellipse cx="71" cy="58" rx="4" ry="2.6" fill="${trim}" opacity=".12"/>
+    <path d="M60 34 q9 1 13 9 q-6 -5 -13 -5 q-7 0 -13 5 q4 -8 13 -9 z" fill="#fff" opacity=".07"/>`;
+
+  const eyes = `
+    <g class="av-eye">
+      <path d="M46.4 52.6 q4.6 -4 9.2 0 q-4.6 3.6 -9.2 0 z" fill="#f6f2ea"/>
+      <path d="M64.4 52.6 q4.6 -4 9.2 0 q-4.6 3.6 -9.2 0 z" fill="#f6f2ea"/>
+      <circle cx="51" cy="52.4" r="2.3" fill="${eye}"/>
+      <circle cx="69" cy="52.4" r="2.3" fill="${eye}"/>
+      <circle cx="51" cy="52.4" r="1.1" fill="#0b0a09"/>
+      <circle cx="69" cy="52.4" r="1.1" fill="#0b0a09"/>
+      <circle cx="50.1" cy="51.4" r=".65" fill="#fff" opacity=".95"/>
+      <circle cx="68.1" cy="51.4" r=".65" fill="#fff" opacity=".95"/>
+    </g>
+    <path d="M46.2 52.2 q4.8 -4.6 9.6 -.2" stroke="${shade(skinDeep, -20)}" stroke-width="1.1" fill="none"/>
+    <path d="M64.2 52.2 q4.8 -4.6 9.6 -.2" stroke="${shade(skinDeep, -20)}" stroke-width="1.1" fill="none"/>
+    <path d="M46.6 55.4 q4.4 2.4 8.8 0" stroke="${skinDeep}" stroke-width=".6" fill="none" opacity=".7"/>
+    <path d="M64.6 55.4 q4.4 2.4 8.8 0" stroke="${skinDeep}" stroke-width=".6" fill="none" opacity=".7"/>
+    <path d="M45.6 47.6 q5.4 -3.4 10.8 -.6" stroke="${brow}" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+    <path d="M63.6 47 q5.4 -2.8 10.8 .6" stroke="${brow}" stroke-width="2.2" stroke-linecap="round" fill="none"/>`;
+
+  const nose = `
+    <path d="M60 53 q-1.4 5.4 -2.6 7.4 q1.2 1.4 2.6 1.4 q1.4 0 2.6 -1.4 q-1.2 -2 -2.6 -7.4 z" fill="${skinLift}" opacity=".55"/>
+    <path d="M57 60.8 q3 2 6 0" stroke="${skinDeep}" stroke-width=".9" fill="none"/>
+    <ellipse cx="57.6" cy="61" rx=".9" ry=".6" fill="${shade(skinDeep, -25)}" opacity=".8"/>
+    <ellipse cx="62.4" cy="61" rx=".9" ry=".6" fill="${shade(skinDeep, -25)}" opacity=".8"/>`;
+
+  const mouth = `
+    <path d="M54.6 66.2 q5.4 -2.4 10.8 0 q-5.4 1.4 -10.8 0 z" fill="${shade(lip, 24)}"/>
+    <path d="M54.6 66.4 q5.4 4 10.8 0 q-5.4 3 -10.8 0 z" fill="${lip}"/>
+    <path d="M54.6 66.3 h10.8" stroke="${shade(lip, -40)}" stroke-width=".7"/>
+    <path d="M60 71.6 q0 1.6 0 2" stroke="${skinDeep}" stroke-width=".6" opacity=".5"/>`;
+
+  /* facial hair */
+  let beard = '';
+  if (o.beard === 'stubble') beard = `<path d="M46 60 q3 14 14 14 q11 0 14 -14 q1 16 -14 18 q-15 -2 -14 -18 z" fill="${hair}" opacity=".26"/>`;
+  else if (o.beard === 'moustache') beard = `<path d="M53 64 q7 -3.4 14 0 q-3 3.6 -7 3.6 q-4 0 -7 -3.6 z" fill="url(#${id}h)"/>`;
+  else if (o.beard === 'goatee') beard = `<path d="M54 64 q6 -3 12 0 q-2.6 3.2 -6 3.2 q-3.4 0 -6 -3.2 z" fill="url(#${id}h)"/><path d="M55.6 70 q4.4 -1.6 8.8 0 q-1.4 6.4 -4.4 6.4 q-3 0 -4.4 -6.4 z" fill="url(#${id}h)"/>`;
+  else if (o.beard === 'full') beard = `<path d="M43.6 55 q1.4 12 4.4 17.6 q3.2 5.8 12 5.8 q8.8 0 12 -5.8 q3 -5.6 4.4 -17.6 q1.6 14 -2 21 q-4.4 8.6 -14.4 8.6 q-10 0 -14.4 -8.6 q-3.6 -7 -2 -21 z" fill="url(#${id}h)"/>
+    <path d="M53 63.6 q7 -3.4 14 0 q-3 3.6 -7 3.6 q-4 0 -7 -3.6 z" fill="${shade(hair, -18)}"/>`;
+  else if (o.beard === 'sideburns') beard = `<path d="M44 52 q2 0 2.6 3 l.6 8 q-2.6 -1 -3.2 -5 z" fill="url(#${id}h)"/><path d="M76 52 q-2 0 -2.6 3 l-.6 8 q2.6 -1 3.2 -5 z" fill="url(#${id}h)"/>`;
+
+  /* hair: some of it sits behind the head, some in front */
+  const H = `url(#${id}h)`;
+  let hairBack = '';
+  let hairArt = '';
+  const cap = `<path d="M40.5 50 q0 -21 19.5 -21 q19.5 0 19.5 21 q-4 -13 -19.5 -13 q-15.5 0 -19.5 13 z" fill="${H}"/>`;
+  if (o.hairStyle === 'short') hairArt = `<path d="M40 52 q0 -22 20 -22 q20 0 20 22 q-2 -12 -8 -14 q-6 4 -12 4 q-6 0 -12 -4 q-6 2 -8 14 z" fill="${H}"/>`;
+  else if (o.hairStyle === 'slick') hairArt = `<path d="M40.5 50 q0 -20 19.5 -20 q19.5 0 19.5 20 q-3 -14 -19.5 -12 q-11 1.4 -19.5 12 z" fill="${H}"/><path d="M45 42 q14 -8 28 -2 q-14 -3 -28 2 z" fill="#fff" opacity=".14"/>`;
+  else if (o.hairStyle === 'curls') {
+    hairBack = `<g fill="${H}"><circle cx="43" cy="47" r="8"/><circle cx="49" cy="35" r="9"/><circle cx="60" cy="30" r="9.5"/><circle cx="71" cy="35" r="9"/><circle cx="77" cy="47" r="8"/></g>`;
+    hairArt = `<path d="M41 50 q3 -14 19 -14 q16 0 19 14 q-5 -9 -19 -9 q-14 0 -19 9 z" fill="${H}"/><g fill="${hairLift}" opacity=".45"><circle cx="50" cy="36" r="2.6"/><circle cx="67" cy="35" r="2.2"/></g>`;
+  } else if (o.hairStyle === 'afro') {
+    hairBack = `<circle cx="60" cy="40" r="23.5" fill="${H}"/><circle cx="51" cy="30" r="6" fill="${hairLift}" opacity=".3"/>`;
+    hairArt = `<path d="M42.5 50 q4 -15 17.5 -15 q13.5 0 17.5 15 q-6 -9 -17.5 -9 q-11.5 0 -17.5 9 z" fill="${shade(hair, -14)}"/>`;
+  } else if (o.hairStyle === 'long') {
+    hairBack = `<path d="M38 52 q0 -23 22 -23 q22 0 22 23 v42 q-7 5 -10.6 -2 v-34 q-4 -6 -11.4 -6 q-7.4 0 -11.4 6 v34 q-3.6 7 -10.6 2 z" fill="${H}"/>`;
+    hairArt = `${cap}<path d="M46 40 q14 -8 28 0 q-14 -4 -28 0 z" fill="#fff" opacity=".1"/>`;
+  } else if (o.hairStyle === 'bun') {
+    hairBack = `<circle cx="60" cy="22" r="9.5" fill="${H}"/><circle cx="57" cy="20" r="3" fill="${hairLift}" opacity=".45"/>`;
+    hairArt = cap;
+  } else if (o.hairStyle === 'ponytail') {
+    hairBack = `<path d="M74 42 q13 8 11 24 q-2 14 -9 17 q7 -14 4 -23 q-2 -10 -6 -13 z" fill="${H}"/>`;
+    hairArt = cap;
+  } else if (o.hairStyle === 'braids') {
+    hairBack = `<g fill="${H}"><rect x="39.5" y="46" width="5" height="36" rx="2.4"/><rect x="75.5" y="46" width="5" height="36" rx="2.4"/></g><g fill="${hairLift}" opacity=".4"><circle cx="42" cy="58" r="1.8"/><circle cx="42" cy="70" r="1.8"/><circle cx="78" cy="58" r="1.8"/><circle cx="78" cy="70" r="1.8"/></g>`;
+    hairArt = cap;
+  } else if (o.hairStyle === 'buzz') hairArt = `<path d="M41.4 52 q0 -20 18.6 -20 q18.6 0 18.6 20 q-4 -13 -18.6 -13 q-14.6 0 -18.6 13 z" fill="${H}" opacity=".78"/>`;
+  else if (o.hairStyle === 'bald') hairArt = `<path d="M46 40 q7 -6 14 -6 q7 0 14 6 q-8 -3 -14 -3 q-6 0 -14 3 z" fill="#fff" opacity=".06"/>`;
+
+  return { head, eyes, nose, mouth, beard, hairArt, hairBack };
+}
+
+/* hats and trinkets */
+function hatArtFor(o, P) {
+  const { trim, dark, id, hair } = P;
+  if (o.hat === 'fedora') return `<ellipse cx="60" cy="38" rx="32" ry="7.5" fill="#14151a"/>
+    <path d="M44 38 q0 -23 16 -23 q16 0 16 23 z" fill="#1b1c22"/>
+    <path d="M44 34 h32 v5 h-32 z" fill="${trim}" opacity=".85"/>
+    <path d="M52 18 q8 -4 16 2 q-8 -2 -16 -2 z" fill="#fff" opacity=".08"/>
+    <ellipse cx="60" cy="38" rx="32" ry="7.5" fill="none" stroke="#000" stroke-width=".8" opacity=".6"/>`;
+  if (o.hat === 'flatcap') return `<path d="M40 38 q-10 0 -10 -4 q0 -21 30 -21 q23 0 23 21 z" fill="#2c3129"/>
+    <path d="M40 38 q-11 0 -11 -4 h24 z" fill="#1d211a"/>
+    <path d="M46 20 q14 -5 24 4 q-12 -4 -24 -4 z" fill="#fff" opacity=".07"/>`;
+  if (o.hat === 'veil') return `<path d="M38 42 q22 -24 44 0 q-4 24 -22 28 q-18 -4 -22 -28 z" fill="#0d0d11" opacity=".42"/>
+    <g stroke="#000" stroke-width=".4" opacity=".3"><path d="M44 40 v24"/><path d="M52 36 v30"/><path d="M60 34 v34"/><path d="M68 36 v30"/><path d="M76 40 v24"/></g>`;
+  if (o.hat === 'beret') return `<path d="M42 40 q-2 -22 20 -22 q18 0 16 20 q-16 6 -36 2 z" fill="${trim}"/><circle cx="74" cy="22" r="2.4" fill="${trim}"/>`;
+  if (o.hat === 'scarf') return `<path d="M40.5 44 q0 -22 19.5 -22 q19.5 0 19.5 22 q-5 -10 -19.5 -10 q-14.5 0 -19.5 10 z" fill="${trim}"/>
+    <path d="M41 43 q-5 14 1 22 q5 -11 3 -22 z" fill="${trim}" opacity=".92"/>
+    <g fill="#fff" opacity=".18"><circle cx="50" cy="38" r="1.6"/><circle cx="60" cy="33" r="1.6"/><circle cx="70" cy="38" r="1.6"/></g>`;
+  if (o.hat === 'homburg') return `<ellipse cx="60" cy="37" rx="28" ry="6.5" fill="#191a20"/><path d="M46 37 q2 -20 14 -20 q12 0 14 20 z" fill="#23242c"/><path d="M46 33 h28 v4 h-28 z" fill="#0e0f13"/>`;
+  return '';
+}
+
+function trinket(kind, o, P) {
+  const { sw, trim, dark, skin, hair } = P;
+  if (kind === 'glasses') return `<g fill="none" stroke="#101016" stroke-width="1.5"><rect x="44.6" y="47.6" width="12" height="9.6" rx="4.4" fill="#cfe4ee" fill-opacity=".18"/><rect x="63.4" y="47.6" width="12" height="9.6" rx="4.4" fill="#cfe4ee" fill-opacity=".18"/><path d="M56.6 52 h6.8"/><path d="M44.6 52 h-4"/><path d="M75.4 52 h4"/></g>`;
+  if (kind === 'sunglasses') return `<g><rect x="43.6" y="47" width="13" height="10" rx="3" fill="#0b0b0f"/><rect x="63.4" y="47" width="13" height="10" rx="3" fill="#0b0b0f"/><path d="M56.6 51 h6.8" stroke="#0b0b0f" stroke-width="2"/><path d="M45 49 l4 3" stroke="#fff" stroke-width="1" opacity=".35"/></g>`;
+  if (kind === 'monocle') return `<g fill="none" stroke="#c9a227" stroke-width="1.4"><circle cx="69" cy="52.4" r="6.4" fill="#cfe4ee" fill-opacity=".16"/><path d="M69 58.8 q2 8 -6 12"/></g>`;
+  if (kind === 'eyepatch') return `<path d="M44 47 q7 -2 13 1 v9 q-7 3 -13 0 z" fill="#12100f"/><path d="M40 46 q20 -6 38 2" stroke="#12100f" stroke-width="1.6" fill="none"/>`;
+  if (kind === 'scar') return `<path d="M71 45 l3.6 11" stroke="#8e1119" stroke-width="1.5" opacity=".8"/><path d="M70 48 l4 1" stroke="#8e1119" stroke-width=".9" opacity=".7"/><path d="M71.4 52 l4 1" stroke="#8e1119" stroke-width=".9" opacity=".7"/>`;
+  if (kind === 'cigar') return `<rect x="64" y="65.4" width="13" height="3" rx="1.2" fill="#efe6d6"/><rect x="64" y="65.4" width="4" height="3" fill="#6b4a2c"/><circle cx="78" cy="66.9" r="1.9" fill="#e3651f"/>
+    <g class="av-smoke" fill="#cfc9bd" opacity=".45"><circle cx="80" cy="61" r="3"/><circle cx="84" cy="55" r="2" opacity=".6"/></g>`;
+  if (kind === 'pipe') return `<path d="M64 67 h9 q3 0 3 4 q0 4 -4 4 q-4 0 -4 -4" stroke="#4b3524" stroke-width="2.4" fill="none"/><g class="av-smoke" fill="#cfc9bd" opacity=".4"><circle cx="77" cy="64" r="2.6"/></g>`;
+  if (kind === 'rose') return `<g><circle cx="${60 + sw - 10}" cy="94" r="3.6" fill="#8e1119"/><circle cx="${60 + sw - 10}" cy="94" r="1.6" fill="#c22"/><path d="M${60 + sw - 10} 97.6 l-2 5" stroke="#2f4a2a" stroke-width="1.4"/></g>`;
+  if (kind === 'earrings') return `<g fill="#d9b45a"><circle cx="43" cy="64.4" r="1.9"/><circle cx="77" cy="64.4" r="1.9"/></g>`;
+  if (kind === 'necklace') return `<path d="M52 84 q8 9 16 0" stroke="#d9b45a" stroke-width="1.4" fill="none"/><circle cx="60" cy="90" r="2.2" fill="#d9b45a"/>`;
+  if (kind === 'watch') return `<circle cx="${60 + sw + 2}" cy="122" r="2.6" fill="#d9b45a"/><circle cx="${60 + sw + 2}" cy="122" r="1.2" fill="#2a2a2f"/>`;
+  if (kind === 'gloves') return `<circle cx="${60 - sw - 2}" cy="129" r="4.8" fill="#15151a"/><circle cx="${60 + sw + 2}" cy="129" r="4.8" fill="#15151a"/>`;
+  if (kind === 'freckles') return `<g fill="${shade(P.skinDeep, -20)}" opacity=".55"><circle cx="50" cy="58" r=".7"/><circle cx="53" cy="60" r=".6"/><circle cx="47.6" cy="61" r=".6"/><circle cx="70" cy="58" r=".7"/><circle cx="67" cy="60" r=".6"/><circle cx="72.4" cy="61" r=".6"/></g>`;
+  return '';
+}
+
+function avatarSVG(o) {
+  const P = avatarParts(o);
+  const F = faceArt(o, P);
+  const hat = hatArtFor(o, P);
+  const front = [o.prop, o.extra].filter(Boolean).map((k) => trinket(k, o, P)).join('');
+
+  return `<svg viewBox="0 0 120 176" role="img" aria-label="character figure" xmlns="http://www.w3.org/2000/svg">
+    ${P.defs}
+    <ellipse cx="60" cy="169" rx="${26 * P.w}" ry="5" fill="#000" opacity=".5"/>
+    <g class="av-body">
+      ${P.legs}${P.shoe}${P.body}${P.arms}
+      <path d="M55 68 h10 v14 h-10 z" fill="${P.skinDeep}"/>
+      <path d="M55 68 h10 v6 q-5 3 -10 0 z" fill="#000" opacity=".25"/>
+      <g class="av-head">
+        ${F.hairBack}${F.head}${F.eyes}${F.nose}${F.mouth}${F.beard}${F.hairArt}${hat}${front}
+      </g>
+    </g>
+  </svg>`;
+}
+
+/* ============================================================
+   REGISTRATION + CHARACTER BUILDER
+   The player controls their look, username and details.
+   Occupation, background, secret and allegiance are dealt.
+   ============================================================ */
+let profile = null;
+let look = randomLook();
+look.outfit = 'suit'; look.hairStyle = 'short'; look.hat = 'none'; look.shoes = 'oxford'; look.prop = 'none'; look.build = 'Average';
+
+const PF = ['pfUser','pfCountry','pfPronoun'];
+const LOOKSEL = { pfBuild: 'build', pfHair: 'hairStyle', pfBeard: 'beard', pfHat: 'hat', pfOutfit: 'outfit', pfShoes: 'shoes', pfProp: 'prop', pfExtra: 'extra' };
+
+function swatchRow(boxId, colours, key) {
+  const box = $(boxId);
+  box.innerHTML = colours.map((c) => `<button class="sw" data-c="${c}" style="background:${c}" title="${c}" aria-label="colour ${c}"></button>`).join('');
+  box.querySelectorAll('.sw').forEach((b) => b.addEventListener('click', () => {
+    look[key] = b.getAttribute('data-c');
+    paintLook();
+  }));
+}
+
+function paintLook() {
+  Object.keys(LOOKSEL).forEach((id) => { if ($(id)) $(id).value = look[LOOKSEL[id]]; });
+  [['swSkin', 'skin'], ['swHair', 'hair'], ['swCloth', 'cloth'], ['swTrim', 'trim'], ['swEye', 'eye'], ['swLip', 'lips']].forEach(([boxId, key]) => {
+    const box = $(boxId);
+    if (!box || !box.querySelectorAll) return;
+    box.querySelectorAll('.sw').forEach((b) => {
+      const on = b.getAttribute('data-c') === look[key];
+      b.className = 'sw' + (on ? ' on' : '');
+    });
+  });
+  $('avatarBig').innerHTML = avatarSVG(look);
+  const u = ($('pfUser').value || '').trim();
+  $('pfName').textContent = u ? '@' + u : 'your username';
+}
+
+function initProfileUI() {
+  swatchRow('swSkin', SKINS, 'skin');
+  swatchRow('swHair', HAIRS, 'hair');
+  swatchRow('swCloth', CLOTHS, 'cloth');
+  swatchRow('swTrim', TRIMS, 'trim');
+  swatchRow('swEye', EYE_COLOURS, 'eye');
+  swatchRow('swLip', LIPS, 'lips');
+  Object.keys(LOOKSEL).forEach((id) => $(id) &&  $(id).addEventListener('change', () => { look[LOOKSEL[id]] = $(id).value; paintLook(); }));
+  $('pfUser').addEventListener('input', paintLook);
+  $('btnRandomLook').addEventListener('click', () => { look = randomLook(); paintLook(); });
+  $('btnForget').addEventListener('click', forgetMe);
+  const remembered = loadProfile();
+  paintRecord();
+  if (remembered) $('pfMsg').textContent = 'Welcome back, @' + remembered.user + '. Your file was waiting.';
+  $('btnProfile').addEventListener('click', () => {
+    const res = readProfile();
+    if (!res.ok) { $('pfMsg').textContent = res.msg; return; }
+    profile = res.profile;
+    saveProfile(profile);
+    $('pfMsg').textContent = profile.consent ? '' : 'Nothing saved \u2014 your file lasts only until you close the tab.';
+    $('userTag').hidden = false;
+    $('userTag').textContent = '@' + profile.user;
+    gotoRules();
+  });
+  paintLook();
+}
+
+function readProfile() {
+  const v = (id) => ($(id) && $(id).value || '').trim();
+  const p = { user: v('pfUser'), country: v('pfCountry'), pronoun: v('pfPronoun') };
+  const missing = [];
+  if (!p.user) missing.push('username');
+  if (!p.country) missing.push('country');
+  if (missing.length) return { ok: false, msg: 'The house needs your ' + missing.join(' and ') + '.' };
+  if (!/^[A-Za-z0-9_.-]{3,18}$/.test(p.user)) return { ok: false, msg: 'Username: 3 to 18 letters, numbers, dot, dash or underscore.' };
+  if (!($('pfAdult') && $('pfAdult').checked)) return { ok: false, msg: 'This table is for adults. Tick the box to confirm you are 18 or over.' };
+  p.adult = true;
+  p.consent = !!($('pfConsent') && $('pfConsent').checked);
+  p.look = JSON.parse(JSON.stringify(look));
+  return { ok: true, profile: p };
+}
+
+/* ---------- roles ---------- */
+const ROLES = {
+  mafia: {
+    label: 'The Mafia',
+    team: 'mafia',
+    desc: 'You are the only Mafia at this table and nobody \u2014 not one soul \u2014 knows it. Each night you choose one person to kill: a civilian, or the nurse if you can guess who she is. By day you sit in the community centre and grieve as loudly as everyone else.'
+  },
+  nurse: {
+    label: 'The Nurse',
+    team: 'town',
+    desc: 'Each night you choose one person to keep alive, and you are never told who was marked. Guess right and they survive the night. Guess wrong and that person dies and nothing can undo it. You may sit up with yourself instead \u2014 but then nobody else is covered.'
+  },
+  civilian: {
+    label: 'A Civilian',
+    team: 'town',
+    desc: 'No gun, no medicine, no badge. Only your ears, your suspicion, and one vote at noon. Everybody in this room looks exactly like you \u2014 including the one who is killing.'
+  }
+};
+const isMafia = (p) => ROLES[p.role].team === 'mafia';
+
+/* ---------- state ---------- */
+let S = null;
+
+let cfg = { size: 8, diff: 0.85 };
+
+/* two admin accounts. Their real identities are never stored or shown \u2014
+   inside the game they exist only as \u201CAdmin 1\u201D and \u201CAdmin 2\u201D. */
+let adminSession = null;
+let lastIssued = null;
+let adminReturnTo = 'screen-gate';
+
+/* ============================================================
+   INVITATIONS
+   One code = one game. The ledger lives in this browser's local
+   storage, so codes survive refreshes and closed tabs.
+   ============================================================ */
+const LEDGER_KEY = 'cosanostra.invites.v1';
+
+function readLedger() {
+  try { return JSON.parse(localStorage.getItem(LEDGER_KEY)) || {}; }
+  catch (e) { return {}; }
+}
+function writeLedger(l) {
+  try { localStorage.setItem(LEDGER_KEY, JSON.stringify(l)); } catch (e) {}
+}
+function randomBlock() {
+  const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = '';
+  const buf = new Uint32Array(4);
+  if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(buf);
+  for (let i = 0; i < 4; i++) {
+    const r = buf[i] ? buf[i] : Math.floor(Math.random() * 4294967296);
+    s += abc[r % abc.length];
+  }
+  return s;
+}
+function issueInvite(by) {
+  const ledger = readLedger();
+  let code;
+  do { code = `MAFIA-${randomBlock()}-${randomBlock()}`; } while (ledger[code]);
+  ledger[code] = { status: 'open', issuedBy: by, issuedAt: Date.now() };
+  writeLedger(ledger);
+  auditNote(by, `wrote invitation ${code}`);
+  return code;
+}
+function normaliseCode(raw) {
+  return (raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+    .replace(/^MAFIA/, '').replace(/^(.{4})(.{4}).*$/, 'MAFIA-$1-$2');
+}
+/* claim = the door opens; the code is spent immediately so a refresh
+   or a second tab cannot reuse it. */
+function claimInvite(raw) {
+  const code = normaliseCode(raw);
+  const ledger = readLedger();
+  const rec = ledger[code];
+  if (!rec) return { ok: false, msg: 'No such invitation. Ask an admin for one.' };
+  if (rec.status === 'void') return { ok: false, msg: 'That invitation was withdrawn.' };
+  if (rec.status !== 'open') return { ok: false, msg: 'That invitation has already been used. You need a new one.' };
+  rec.status = 'live';
+  rec.claimedAt = Date.now();
+  writeLedger(ledger);
+  return { ok: true, code };
+}
+function burnInvite(code) {
+  if (!code) return;
+  const ledger = readLedger();
+  if (ledger[code]) { ledger[code].status = 'used'; ledger[code].usedAt = Date.now(); writeLedger(ledger); }
+}
+let ticket = null;   // the invitation currently at the table
+
+$('btnInvite').addEventListener('click', () => {
+  const res = claimInvite($('inviteCode').value);
+  if (!res.ok) { $('inviteMsg').textContent = res.msg; return; }
+  ticket = res.code;
+  $('inviteCode').value = '';
+  $('inviteMsg').textContent = '';
+  renderInvites();
+  show(profile ? 'screen-setup' : 'screen-profile');
+});
+$('inviteCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnInvite').click(); });
+
+$('btnTopAdmin').addEventListener('click', () => {
+  if (document.getElementById('screen-admin').classList.contains('active')) { show(adminReturnTo); return; }
+  adminReturnTo = activeScreen || 'screen-gate';
+  show('screen-admin');
+  renderAdmin();
+});
+$('btnAdminBack').addEventListener('click', () => show(adminReturnTo));
+$('btnAdminBack2').addEventListener('click', () => show(adminReturnTo));
+
+$('btnMakeInvite').addEventListener('click', () => {
+  if (!adminSession) return;
+  lastIssued = issueInvite(adminSession);
+  $('inviteOut').textContent = `Written: ${lastIssued} \u2014 good for one game.`;
+  renderInvites();
+});
+
+$('btnCopyInvite').addEventListener('click', async () => {
+  if (!lastIssued) { $('inviteOut').textContent = 'Write an invitation first.'; return; }
+  const link = inviteLinkFor(lastIssued);
+  const text = `You are invited to one game of Cosa Nostra.\nStep straight in: ${link}\nOr type the code by hand: ${lastIssued}\nGood for a single game. After that you will need a new one.`;
+  try {
+    await navigator.clipboard.writeText(text);
+    $('inviteOut').textContent = 'Copied \u2014 code and one-click link. Send it however you like.';
+  } catch (e) {
+    $('inviteOut').textContent = `Copy this by hand: ${lastIssued}`;
+  }
+});
+
+function renderInvites() {
+  const box = $('inviteList');
+  if (!box) return;
+  const ledger = readLedger();
+  const codes = Object.keys(ledger).sort((a, b) => ledger[b].issuedAt - ledger[a].issuedAt);
+  if (!codes.length) { box.innerHTML = '<div class="rrow"><span class="tiny">No invitations written yet.</span></div>'; return; }
+  const label = { open: ['st-open', 'Unused'], live: ['st-live', 'At the table'], used: ['st-used', 'Burned'], void: ['st-void', 'Withdrawn'] };
+  box.innerHTML = codes.slice(0, 40).map((c) => {
+    const r = ledger[c];
+    const [cls, txt] = label[r.status] || ['st-void', r.status];
+    const when = new Date(r.issuedAt).toLocaleString();
+    return `<div class="rrow stack">
+      <span><span class="code">${c}</span><br><span class="tiny">issued by ${r.issuedBy} \u00B7 ${when}</span></span>
+      <span class="${cls}">${txt}</span>
+      ${r.status === 'open' ? `<button class="voidbtn" data-void="${c}">Withdraw</button>` : '<span class="tiny">&mdash;</span>'}
+    </div>`;
+  }).join('');
+  box.querySelectorAll('[data-void]').forEach((b) => b.addEventListener('click', () => {
+    const ledger2 = readLedger();
+    const c = b.getAttribute('data-void');
+    if (ledger2[c] && ledger2[c].status === 'open') { ledger2[c].status = 'void'; writeLedger(ledger2); }
+    renderInvites();
+  }));
+}
+
+/* ---------- setup screen wiring ---------- */
+$('townSize').addEventListener('input', (e) => {
+  cfg.size = Math.max(4, +e.target.value);
+  $('townSizeOut').textContent = cfg.size;
+});
+function wireChoices(wrapId, key, cast) {
+  $(wrapId).addEventListener('click', (e) => {
+    const b = e.target.closest('.choice');
+    if (!b) return;
+    [...$(wrapId).children].forEach((c) => c.classList.remove('selected'));
+    b.classList.add('selected');
+    cfg[key] = cast(b.dataset[key]);
+  });
+}
+wireChoices('diffChoices', 'diff', (v) => +v);
+
+let activeScreen = 'screen-gate';
+function show(id) {
+  if (id !== 'screen-admin') activeScreen = id;
+  document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
+  $(id).classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* ---------- log ---------- */
+function log(text, cls = '') {
+  if (S && S.record) {
+    S.record.events.push({ day: S.day, phase: S.phase, kind: cls || 'note', text: stripTags(text) });
+    if (S.record.events.length > 400) S.record.events.shift();
+  }
+  const d = document.createElement('div');
+  d.className = 'entry ' + cls;
+  d.innerHTML = text;
+  $('log').appendChild(d);
+  $('log').scrollTop = $('log').scrollHeight;
+  const mirror = $('adminLog');
+  if (mirror) {
+    const c = d.cloneNode(true);
+    mirror.appendChild(c);
+    while (mirror.children.length > 120) mirror.removeChild(mirror.firstChild);
+    mirror.scrollTop = mirror.scrollHeight;
+  }
+}
+
+/* ---------- build a game ---------- */
+function newGame() {
+  const n = cfg.size;
+  /* exactly one Mafia, exactly one Nurse, everybody else a civilian */
+  const roleBag = ['mafia', 'nurse'];
+  while (roleBag.length < n) roleBag.push('civilian');
+  roleBag.length = n;
+
+  const cast = buildCast(n);
+  const roles = shuffle(roleBag);   // fate deals. nobody picks a side.
+  const mystery = pick(MYSTERY);
+
+  const players = cast.map((c, i) => ({
+    id: i,
+    name: c.name,
+    face: c.face,
+    trait: c.trait,
+    job: c.job,
+    look: c.look,
+    publicClue: c.publicClue,
+    secret: c.secret,
+    hunch: c.suspicion,
+    deathClue: c.deathClue,
+    role: roles[i],
+    alive: true,
+    isYou: i === 0,
+    will: i === 0 ? '' : (Math.random() < 0.75 ? pick(AI_WILLS) : ''),
+    known: {}
+  }));
+
+  /* seat 1 is the player: their own name, username and figure,
+     but the past they are handed stays random */
+  if (profile) {
+    const me = players[0];
+    me.name = '@' + profile.user;
+    me.look = JSON.parse(JSON.stringify(profile.look));
+    me.trait = `${profile.pronoun} \u00B7 ${profile.country}`;
+    me.file = profile;
+  }
+
+  S = {
+    players,
+    mystery,
+    day: 0,
+    phase: 'night',
+    you: players[0],
+    awaiting: null,
+    choice: null,
+    lastGuard: null,
+    over: false,
+    /* roughly a third of the time this Mafia simply never slips up */
+    slips: Math.random() > 0.35,
+    record: {
+      id: 'S' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      started: new Date().toISOString(),
+      size: n,
+      difficulty: cfg.diff,
+      mystery,
+      seats: players.map((q) => ({
+        name: q.name,
+        role: q.role,
+        job: q.job,
+        secret: q.secret,
+        isYou: q.isYou,
+        file: q.file ? { user: q.file.user, pronoun: q.file.pronoun, country: q.file.country } : null
+      })),
+      events: []
+    }
+  };
+  S.yourWill = '';
+  if ($('willIn')) $('willIn').value = '';
+  if ($('willNote')) $('willNote').textContent = 'Left blank for now.';
+  if ($('ghostchat')) $('ghostchat').innerHTML = '';
+  showGhostRoom(false);
+  renderAdmin();
+}
+
+const alive = () => S.players.filter((p) => p.alive);
+const aliveMafia = () => alive().filter((p) => isMafia(p));
+const aliveTown = () => alive().filter((p) => !isMafia(p));
+const nameOf = (p) => `<b>${p.name}</b>`;
+
+/* ============================================================
+   START / REVEAL
+   ============================================================ */
+$('btnStart').addEventListener('click', () => {
+  if (!ticket) { show('screen-gate'); $('inviteMsg').textContent = 'You need a valid invitation to sit down.'; return; }
+  newGame();
+  const you = S.you;
+  const r = ROLES[you.role];
+  $('revealAvatar').innerHTML = avatarSVG(you.look);
+  $('revealRole').textContent = r.label;
+  $('revealTeam').textContent = r.team === 'mafia' ? 'You answer to the family' : 'You answer to the town';
+  $('revealTeam').className = 'team-line ' + (r.team === 'mafia' ? '' : 'town');
+  $('revealDesc').textContent = `You are ${you.name} \u2014 ${you.trait}. ${r.desc}`;
+  $('revealStory').innerHTML = `
+    <h4>The case</h4>
+    <p>Everyone at this table is tangled in ${S.mystery}.</p>
+    <h4>Dealt to you, not chosen</h4>
+    <p>By trade you are a ${you.job}. ${you.name} ${you.publicClue} \u2014 and the room knows it.</p>
+    <h4>What only you know</h4>
+    <p class="secret">Whatever else happens, ${you.secret}.</p>
+    <h4>Your own hunch</h4>
+    <p class="secret">${you.hunch.charAt(0).toUpperCase() + you.hunch.slice(1)}.</p>`;
+  $('revealAllies').innerHTML = isMafia(you)
+    ? 'You have no partners, no family and no backup. Nobody at this table knows your face for what it is \u2014 and you do not know theirs either.'
+    : 'You do not know who the Mafia is. You do not know who the Nurse is. Everybody in that room looks exactly like a civilian, including you.';
+  show('screen-reveal');
+});
+
+$('btnBegin').addEventListener('click', () => {
+  show('screen-game');
+  $('log').innerHTML = '';
+  $('roleTag').textContent = ROLES[S.you.role].label;
+  log('Rain on the cobblestones. Eleven o\u2019clock. The doors of the club lock from the inside.', 'big');
+  log(`Tonight the room is still arguing about ${S.mystery}.`, 'day');
+  runNight();
+});
+
+$('btnAgain').addEventListener('click', () => {
+  ticket = null;
+  S = null;
+  $('inviteMsg').textContent = 'That invitation is burned. A new one is needed.';
+  show('screen-gate');
+});
+
+/* ============================================================
+   ATMOSPHERE: rain, bells and gunshots, generated on the fly
+   (no audio files, nothing loaded from the network)
+   ============================================================ */
+const snd = { on: true, ctx: null, rain: null, gain: null, amb: null };
+
+function audioReady() {
+  if (snd.ctx) return true;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return false;
+  snd.ctx = new AC();
+  snd.gain = snd.ctx.createGain();
+  snd.gain.gain.value = typeof snd.volume === 'number' ? snd.volume : 0.5;
+  snd.gain.connect(snd.ctx.destination);
+  return true;
+}
+
+function noiseBuffer(seconds) {
+  const len = Math.floor(snd.ctx.sampleRate * seconds);
+  const buf = snd.ctx.createBuffer(1, len, snd.ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  return buf;
+}
+
+function startRain() {
+  if (!snd.on || snd.rain || !audioReady()) return;
+  const src = snd.ctx.createBufferSource();
+  src.buffer = noiseBuffer(2.5);
+  src.loop = true;
+  const hp = snd.ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 900;
+  const lp = snd.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 5200;
+  const g = snd.ctx.createGain(); g.gain.value = 0.08;
+  src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(snd.gain);
+  src.start();
+  snd.rain = { src, g };
+}
+
+function stopRain() {
+  if (snd.rain) { try { snd.rain.src.stop(); } catch (e) {} snd.rain = null; }
+}
+
+function sfx(kind) {
+  if (!snd.on || !audioReady()) return;
+  const t = snd.ctx.currentTime;
+  if (kind === 'shot' || kind === 'thud') {
+    const src = snd.ctx.createBufferSource();
+    src.buffer = noiseBuffer(0.5);
+    const bp = snd.ctx.createBiquadFilter();
+    bp.type = kind === 'shot' ? 'bandpass' : 'lowpass';
+    bp.frequency.value = kind === 'shot' ? 1400 : 220;
+    const g = snd.ctx.createGain();
+    g.gain.setValueAtTime(kind === 'shot' ? 0.55 : 0.4, t);
+    g.gain.exponentialRampToValueAtTime(0.0007, t + (kind === 'shot' ? 0.42 : 0.6));
+    src.connect(bp); bp.connect(g); g.connect(snd.gain);
+    src.start(t); src.stop(t + 0.7);
+  } else {
+    const freq = kind === 'bell' ? 196 : 330;
+    [1, 2.02, 2.98].forEach((m, i) => {
+      const o = snd.ctx.createOscillator();
+      const g = snd.ctx.createGain();
+      o.frequency.value = freq * m;
+      o.type = 'sine';
+      g.gain.setValueAtTime(0.16 / (i + 1), t);
+      g.gain.exponentialRampToValueAtTime(0.0006, t + 2.4);
+      o.connect(g); g.connect(snd.gain);
+      o.start(t); o.stop(t + 2.5);
+    });
+  }
+}
+
+function wireSound() {
+  $('btnSound').addEventListener('click', () => {
+    snd.on = !snd.on;
+    $('btnSound').textContent = snd.on ? 'Sound On' : 'Sound Off';
+    $('btnSound').className = 'tagbtn quiet' + (snd.on ? ' on' : '');
+    if (snd.on) { audioReady(); if (snd.ctx && snd.ctx.resume) snd.ctx.resume(); startRain(); startAmbience(); }
+    else { stopRain(); stopAmbience(); }
+  });
+  /* the button starts switched on, but browsers only let sound out after a click,
+     so the first thing the player presses is what actually opens the audio */
+  $('btnSound').textContent = 'Sound On';
+  $('btnSound').className = 'tagbtn quiet on';
+  const wake = () => {
+    if (!snd.on) return;
+    audioReady();
+    if (snd.ctx && snd.ctx.resume) snd.ctx.resume();
+    startRain();
+    startAmbience();
+  };
+  if (typeof document.addEventListener === 'function') {
+    document.addEventListener('click', wake);
+    document.addEventListener('keydown', wake);
+  }
+}
+
+/* ============================================================
+   UNDERSCORE: a low, uneasy hum that sits under everything
+   (a drone, a slow heartbeat and the odd cold high note)
+   ============================================================ */
+function startAmbience() {
+  if (!snd.on || snd.amb || !audioReady()) return;
+  const ctx = snd.ctx, t = ctx.currentTime;
+  const bus = ctx.createGain();
+  bus.gain.value = 0;
+  bus.connect(snd.gain);
+  bus.gain.linearRampToValueAtTime(0.5, t + 6);   // fades in, never announces itself
+
+  /* two detuned low strings, a minor third apart */
+  const drone = ctx.createGain(); drone.gain.value = 0.05; drone.connect(bus);
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 320; lp.Q.value = 0.6;
+  lp.connect(drone);
+  const oscs = [55, 55.35, 65.4].map((f, i) => {
+    const o = ctx.createOscillator();
+    o.type = i === 2 ? 'triangle' : 'sawtooth';
+    o.frequency.value = f;
+    const g = ctx.createGain(); g.gain.value = i === 2 ? 0.25 : 0.5;
+    o.connect(g); g.connect(lp);
+    o.start(t);
+    return o;
+  });
+
+  /* the drone breathes, so it never sounds like a stuck tone */
+  const breathe = ctx.createOscillator();
+  breathe.frequency.value = 0.07;
+  const breatheAmt = ctx.createGain(); breatheAmt.gain.value = 60;
+  breathe.connect(breatheAmt); breatheAmt.connect(lp.frequency);
+  breathe.start(t);
+
+  /* heartbeat: two soft thuds, a little under a second apart */
+  const beatBus = ctx.createGain(); beatBus.gain.value = 0.5; beatBus.connect(bus);
+  const thump = (at, level) => {
+    const o = ctx.createOscillator(); o.type = 'sine';
+    const g = ctx.createGain();
+    o.frequency.setValueAtTime(64, at);
+    o.frequency.exponentialRampToValueAtTime(38, at + 0.16);
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(level, at + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + 0.3);
+    o.connect(g); g.connect(beatBus);
+    o.start(at); o.stop(at + 0.35);
+  };
+
+  /* one cold high note now and then, like a bowed glass */
+  const shiver = (at) => {
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.value = [784, 932, 1046, 1244][Math.floor(Math.random() * 4)];
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.linearRampToValueAtTime(0.012, at + 1.4);
+    g.gain.linearRampToValueAtTime(0.0001, at + 4.2);
+    const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    o.connect(g);
+    if (pan) { pan.pan.value = Math.random() * 1.6 - 0.8; g.connect(pan); pan.connect(bus); }
+    else g.connect(bus);
+    o.start(at); o.stop(at + 4.5);
+  };
+
+  const pulse = () => {
+    if (!snd.on || !snd.amb) return;
+    const now = ctx.currentTime;
+    const level = snd.amb.mood === 'night' ? 0.16 : 0.1;
+    thump(now + 0.05, level);
+    thump(now + 0.42, level * 0.62);
+    if (Math.random() < (snd.amb.mood === 'night' ? 0.5 : 0.28)) shiver(now + Math.random() * 1.2);
+  };
+
+  const id = typeof setInterval === 'function'
+    ? setInterval(pulse, snd.ambSlow ? 2600 : 1900)
+    : null;
+  snd.amb = { bus, oscs: oscs.concat([breathe]), id, mood: 'night' };
+  pulse();
+}
+
+function stopAmbience() {
+  if (!snd.amb) return;
+  const a = snd.amb;
+  snd.amb = null;
+  if (a.id && typeof clearInterval === 'function') clearInterval(a.id);
+  try {
+    const t = snd.ctx.currentTime;
+    a.bus.gain.cancelScheduledValues(t);
+    a.bus.gain.setValueAtTime(a.bus.gain.value, t);
+    a.bus.gain.linearRampToValueAtTime(0, t + 1.2);
+    a.oscs.forEach((o) => { try { o.stop(t + 1.4); } catch (e) {} });
+  } catch (e) {}
+}
+
+/* the underscore leans darker at night and eases off in daylight */
+function ambienceMood(mood) {
+  if (!snd.amb) return;
+  snd.amb.mood = mood;
+  try {
+    const t = snd.ctx.currentTime;
+    snd.amb.bus.gain.cancelScheduledValues(t);
+    snd.amb.bus.gain.setValueAtTime(snd.amb.bus.gain.value, t);
+    snd.amb.bus.gain.linearRampToValueAtTime(mood === 'night' ? 0.62 : 0.34, t + 2.5);
+  } catch (e) {}
+}
+
+/* ============================================================
+   PHASE CLOCK
+   ============================================================ */
+const clock = { id: null, left: 0, onEnd: null };
+
+function stopClock() {
+  if (clock.id && typeof clearInterval === 'function') clearInterval(clock.id);
+  clock.id = null; clock.onEnd = null;
+  if ($('clockTag')) $('clockTag').hidden = true;
+}
+
+function startClock(seconds, onEnd) {
+  stopClock();
+  if (typeof setInterval !== 'function') return;   // headless: no timers
+  clock.left = seconds;
+  clock.onEnd = onEnd;
+  const tag = $('clockTag');
+  tag.hidden = false;
+  const paint = () => {
+    const m = Math.floor(clock.left / 60), s = clock.left % 60;
+    tag.textContent = `${m}:${s < 10 ? '0' : ''}${s}`;
+    tag.className = 'tag' + (clock.left <= 10 ? ' blood' : '');
+  };
+  paint();
+  clock.id = setInterval(() => {
+    if (S && S.paused) return;
+    clock.left--;
+    paint();
+    if (clock.left <= 0) {
+      const fn = clock.onEnd;
+      stopClock();
+      if (fn) fn();
+    }
+  }, 1000);
+}
+
+/* ============================================================
+   NIGHT
+   One Mafia picks somebody to kill. One Nurse picks somebody to
+   save, blind. If the two names match, that person lives.
+   ============================================================ */
+function runNight() {
+  S.day++;
+  S.phase = 'night';
+  ambienceMood('night');
+  announce('Night falls. The Mafia is choosing. Nobody speaks until morning.');
+  S.act = { kill: null, save: null };
+  $('phaseTag').textContent = 'Night';
+  $('dayTag').textContent = 'Night ' + S.day;
+  setSpeech([]);
+  chatSystem(`Night ${S.day}. The community centre empties out. Everybody locks their own door.`);
+  log(`&mdash; Night ${S.day}. The lamps go out one by one. &mdash;`, 'night');
+  sfx('bell');
+
+  const you = S.you;
+  S.queue = [];
+  const maf = alive().find((p) => p.role === 'mafia');
+  const nurse = alive().find((p) => p.role === 'nurse');
+  if (maf) S.queue.push(maf.isYou ? 'mafia' : 'ai-mafia');
+  if (nurse) S.queue.push(nurse.isYou ? 'nurse' : 'ai-nurse');
+  nextStep();
+}
+
+function nextStep() {
+  if (!S.queue.length) return resolveNight();
+  const step = S.queue.shift();
+  const A = S.act;
+
+  if (step === 'mafia') {
+    log('Nobody is coming to help you decide. There is no family, no second opinion \u2014 only you and the list of names.', 'talk');
+    if (S.blockedKill && S.blockedKill.alive) log(`Whoever pulled ${nameOf(S.blockedKill)} through last night will be watching that door tonight. Pick someone else.`, 'talk');
+    return ask('You are the only Mafia at this table. Who does not see morning?', (p) => p.alive && !p.isYou && p !== S.blockedKill, (t) => {
+      A.kill = t;
+      log(`You wait in the dark outside ${nameOf(t)}\u2019s door.`, 'kill');
+      nextStep();
+    });
+  }
+  if (step === 'ai-mafia') {
+    A.kill = aiMafiaTarget();
+    return nextStep();
+  }
+  if (step === 'nurse') {
+    if (S.lastSaved && S.lastSaved.alive) log(`You cannot spend a second night on ${nameOf(S.lastSaved)}\u2019s floor \u2014 the whole street would notice.`, 'talk');
+    return ask('You do not know who was marked tonight. Who do you sit up with? You may pick yourself, but not the same person two nights running.', (p) => p.alive && p !== S.lastSaved, (t) => {
+      A.save = t;
+      log(t.isYou ? 'You bolt your own door and sit up with the lamp on.' : `You keep your bag packed outside ${nameOf(t)}\u2019s window.`, 'night');
+      nextStep();
+    });
+  }
+  if (step === 'ai-nurse') {
+    const nurse = alive().find((p) => p.role === 'nurse');
+    A.save = aiNurseChoice(nurse);
+    return nextStep();
+  }
+  return resolveNight();
+}
+
+/* the Mafia knows nothing about anybody's card either \u2014 they go
+   after whoever is loudest, sharpest, or closest to naming them */
+function aiMafiaTarget() {
+  const maf = alive().find((p) => p.role === 'mafia');
+  const targets = alive().filter((p) => p !== maf && p !== S.blockedKill);
+  if (!targets.length) return null;
+  return targets.map((p) => {
+    let s = Math.random();
+    s += (p.talk || 0) * 0.35 * cfg.diff;              // people who talk a lot
+    if (p.accusedMafia) s += 1.2 * cfg.diff;           // people who pointed at them
+    if (p.isYou) s += 0.2;
+    s -= (p.heat || 0) * 0.25 * cfg.diff;              // leave the ones the room already suspects
+    return { p, s };
+  }).sort((a, b) => b.s - a.s)[0].p;
+}
+
+/* the Nurse is guessing too: mostly whoever looks most exposed,
+   and now and then her own neck */
+function aiNurseChoice(nurse) {
+  const all = alive().filter((p) => p !== S.lastSaved);
+  if (!all.length) return null;
+  if (nurse !== S.lastSaved && Math.random() < 0.3) return nurse;
+  const others = all.filter((p) => p !== nurse);
+  if (!others.length) return nurse;
+  return others.map((p) => ({ p, s: Math.random() + (p.talk || 0) * 0.3 + (p.accusedMafia ? 0.8 : 0) }))
+    .sort((a, b) => b.s - a.s)[0].p;
+}
+
+function resolveNight() {
+  const A = S.act;
+  const dead = [];
+  S.lastSaved = A.save || null;                                  // no two nights on the same floor
+  S.blockedKill = (A.kill && A.save === A.kill) ? A.kill : null;  // the one who got away is off the list tonight
+
+  if (A.kill) {
+    if (A.save === A.kill) {
+      S.saves = (S.saves || 0) + 1;
+      if (typeof window !== 'undefined') window.__saveTally = (window.__saveTally || 0) + 1;
+      const nurse = alive().find((p) => p.role === 'nurse');
+      log(`A shot in the alley behind the bakery \u2014 and somebody was already kneeling there with a bag of dressings. ${nameOf(A.kill)} lives to see the sun.`, 'day');
+      if (nurse && nurse.isYou) log('You guessed right. Whoever did it walked off into the fog before you could see a face.', 'you');
+      else if (A.kill.isYou) log('You woke on the floor with your shirt cut open and somebody\u2019s hands on the wound. You never saw who saved you, or who tried to kill you.', 'you');
+      chatSystem(`Somebody was attacked in the night and lived. Nobody knows who pulled them through.`);
+    } else {
+      dead.push({ p: A.kill, how: 'found face down in the rain, the water running red toward the drain' });
+    }
+  } else {
+    log('No one dies tonight. Somehow that is worse.', 'night');
+  }
+
+  killSequence(dead, () => {
+    if (checkEnd()) return;
+    runDay();
+  });
+}
+
+function killSequence(list, done) {
+  if (!list.length) return done();
+  const { p, how } = list.shift();
+  p.alive = false;
+  sfx('shot');
+  log(`Dawn. ${nameOf(p)} is ${how}.`, 'kill');
+  log(`Found on the body: ${p.deathClue}.`, 'day');
+  revealWill(p);
+  chatSystem(`${p.name} did not come to the centre this morning. ${p.name} is dead.`);
+  renderAdmin();
+  render();
+  withLastWords(p, () => killSequence(list, done));
+}
+
+/* ============================================================
+   LAST WORDS
+   ============================================================ */
+function withLastWords(victim, done) {
+  const AI_LAST = [
+    'You are hanging the wrong neck and you will know it by morning.',
+    'Tell my sister the money is under the third floorboard.',
+    'I was never anything but a civilian. Somebody in this room knows that.',
+    'Look at who is holding the rope, not who is in it.',
+    'I forgive nobody in this room.',
+    'Ask them where they really were.'
+  ];
+  if (!victim.isYou) {
+    log(`${nameOf(victim)}, last words: \u201C${pick(AI_LAST)}\u201D`, 'talk');
+    return done();
+  }
+  const box = $('lastWords');
+  box.hidden = false;
+  $('actionPrompt').innerHTML = 'You have one line left. Make it count.';
+  const finishLine = () => {
+    const txt = ($('lastWordsIn').value || '').trim();
+    $('lastWordsIn').value = '';
+    box.hidden = true;
+    stopClock();
+    log(txt ? `You, with your last breath: \u201C${escapeText(txt)}\u201D` : 'You say nothing at all.', 'you');
+    if (txt) chatSay(S.you, escapeText(txt), true);
+    done();
+  };
+  S.lastWordsDone = finishLine;
+  startClock(20, finishLine);
+}
+
+function escapeText(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* ============================================================
+   WILLS \u2014 a folded note, read out when the body is found
+   ============================================================ */
+const AI_WILLS = [
+  'If you are reading this, I was not the one. Count who gained by it.',
+  'The money in the tin is my sister\u2019s. Everything else can burn.',
+  'I wrote down who I did not trust. The page is gone from this book.',
+  'Whoever holds the rope next: ask them where they slept.',
+  'I was a working person and nothing else. Say that at the funeral.',
+  'Somebody in that centre knew and said nothing. That is the worse crime.',
+  'Do not vote for the loudest one. Vote for the one who agrees with everybody.'
+];
+
+function revealWill(p) {
+  const text = p.isYou ? (S.yourWill || '') : (p.will || '');
+  if (!text) {
+    log(`${nameOf(p)} left nothing behind but the clothes they died in.`, 'night');
+    return;
+  }
+  log(`A folded note in ${p.isYou ? 'your' : p.name + '\u2019s'} coat is read out to the room: \u201C${text}\u201D`, 'talk');
+  chatSystem(`${p.isYou ? 'Your' : p.name + '\u2019s'} will was read out: \u201C${text}\u201D`);
+}
+
+function wireWill() {
+  const box = $('willIn');
+  if (!box) return;
+  box.addEventListener('input', () => {
+    if (!S) return;
+    S.yourWill = escapeText((box.value || '').trim()).slice(0, 180);
+    const note = $('willNote');
+    if (note) note.textContent = S.yourWill ? 'Sealed. It is read out if you die.' : 'Left blank for now.';
+  });
+}
+
+/* ============================================================
+   THE DEAD ROOM \u2014 spectators talk where the living cannot hear
+   ============================================================ */
+const GHOST_LINES = [
+  (p, t) => `From this side of it: they are all still missing it. Watch ${t.name}.`,
+  (p) => `I would give anything for one more vote.`,
+  (p, t) => `${t.name} is lying and nobody in there can tell.`,
+  (p) => `You get a clear view of the room once you are out of it.`,
+  (p, t) => `Somebody ask ${t.name} the same question twice.`
+];
+
+function ghostSay(p, text, mine) {
+  const box = $('ghostchat');
+  if (!box) return;
+  const d = document.createElement('div');
+  d.className = 'msg ghost' + (mine ? ' mine' : '');
+  d.innerHTML = `<span class="who">${avatarSVG(p.look)}</span>` +
+    `<span class="bub"><span class="nm">${p.isYou ? 'You' : p.name}</span>${text}</span>`;
+  box.appendChild(d);
+  while (box.children.length > 60) box.removeChild(box.firstChild);
+  box.scrollTop = box.scrollHeight;
+  /* the dead are logged for the admins only \u2014 never in the living room's log */
+  if (S && S.record) S.record.events.push({ day: S.day, phase: 'spectators', kind: 'ghost', text: `${p.isYou ? 'The player' : p.name} (dead): ${stripTags(text)}` });
+}
+
+const dead = () => S.players.filter((p) => !p.alive);
+
+function ghostChatter(n) {
+  const ghosts = dead().filter((p) => !p.isYou);
+  const living = alive();
+  if (!ghosts.length || !living.length) return;
+  for (let i = 0; i < n; i++) {
+    const sp = pick(ghosts);
+    const t = pick(living);
+    ghostSay(sp, pick(GHOST_LINES)(sp, t));
+  }
+}
+
+function showGhostRoom(on) {
+  const panel = $('ghostpanel');
+  if (panel) panel.hidden = !on;
+}
+
+function wireGhostChat() {
+  const btn = $('btnGhostSay'), field = $('ghostIn');
+  if (!btn || !field) return;
+  const send = () => {
+    if (!S || S.over || S.you.alive) return;
+    const raw = (field.value || '').trim();
+    if (!raw) return;
+    field.value = '';
+    ghostSay(S.you, escapeText(raw).slice(0, 140), true);
+    ghostChatter(1);
+  };
+  btn.addEventListener('click', send);
+  field.addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+}
+
+/* ============================================================
+   THE COMMUNITY CENTRE (chat room)
+   Everyone posts here \u2014 civilians, the Nurse and the Mafia.
+   ============================================================ */
+function chatSay(p, text, mine) {
+  const box = $('chat');
+  if (!box) return;
+  const d = document.createElement('div');
+  d.className = 'msg' + (mine ? ' mine' : '');
+  d.innerHTML = `<span class="who">${avatarSVG(p.look)}</span>` +
+    `<span class="bub"><span class="nm">${p.isYou ? 'You' : p.name}</span>${text}</span>`;
+  box.appendChild(d);
+  while (box.children.length > 80) box.removeChild(box.firstChild);
+  box.scrollTop = box.scrollHeight;
+  p.talk = (p.talk || 0) + 1;
+  log(`<b>${p.isYou ? 'You' : p.name}</b> in the centre: \u201C${text}\u201D`, mine ? 'you' : 'talk');
+}
+
+function chatSystem(text) {
+  const box = $('chat');
+  if (!box) return;
+  const d = document.createElement('div');
+  d.className = 'msg system';
+  d.innerHTML = `<span class="bub">${text}</span>`;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+
+const CIV_LINES = [
+  (p, t) => `I keep coming back to ${t.name}. Where were you, really?`,
+  (p, t) => `${t.name} ${t.publicClue}. Somebody explain that to me.`,
+  (p, t) => `I am not saying it is ${t.name}. I am saying nobody has asked ${t.name} anything.`,
+  (p) => `We hang the wrong person today and we are down two. Think before you raise a hand.`,
+  (p) => `I am a ${p.job}. I have nothing to do with any of this.`,
+  (p, t) => `${t.name} has been very quiet for somebody with nothing to hide.`,
+  (p) => `Whoever it is, they are sitting in this room reading what we write.`
+];
+const MAFIA_LINES = [
+  (p, t) => `${t.name}. I saw a light on in ${t.name}\u2019s window when there should not have been one.`,
+  (p, t) => `Listen to ${t.name} talk. That is not grief, that is performance.`,
+  (p) => `I am as frightened as the rest of you. My hands are clean.`,
+  (p, t) => `We are wasting the day. Vote ${t.name} and be done with it.`,
+  (p) => `Whoever the nurse is, say nothing. They will come for you next.`
+];
+const NURSE_LINES = [
+  (p) => `Do not rush the vote. If we hang a civilian we hand them the game.`,
+  (p, t) => `${t.name}, if anything happens to you tonight, I want the room to remember this conversation.`,
+  (p) => `Somebody was very lucky last night. Leave it at that.`,
+  (p, t) => `I would rather watch ${t.name} for a day than hang them by lunchtime.`
+];
+
+function aiChatter(count) {
+  const living = alive().filter((p) => !p.isYou);
+  for (let i = 0; i < count && living.length; i++) {
+    const sp = pick(living);
+    const others = alive().filter((q) => q !== sp);
+    if (!others.length) return;
+    /* they aim at whoever is already under suspicion, or at random */
+    const hot = others.filter((q) => (q.heat || 0) >= 1.5);
+    let t = hot.length && Math.random() < 0.55 ? pick(hot) : pick(others);
+    if (sp.role === 'mafia') {
+      const safe = others.filter((q) => q.role !== 'mafia');
+      if (safe.length) t = Math.random() < 0.7 ? pick(safe.filter((q) => (q.heat || 0) >= 1.5).concat(safe)) : t;
+    }
+    const bank = sp.role === 'mafia' ? MAFIA_LINES : sp.role === 'nurse' ? NURSE_LINES : CIV_LINES;
+    const line = pick(bank);
+    chatSay(sp, line(sp, t));
+    if (/\b(vote|saw|quiet|where were you|performance|explain)\b/i.test(line(sp, t))) t.heat = (t.heat || 0) + (sp.role === 'mafia' ? 1.5 : 1);
+    else t.heat = (t.heat || 0) + 0.5;
+  }
+}
+
+/* someone answers back when a name is used */
+function aiReplyTo(target, accuser) {
+  const DEF = [
+    (p) => `Me? I am a ${p.job}. Ask anybody who was in my shop.`,
+    (p) => `Yes, I ${p.publicClue}. That makes me unlucky, not a killer.`,
+    (p) => `Accuse me and you waste the day. Then count the bodies tomorrow.`,
+    (p) => `I have nothing. No gun, no bag of medicine, nothing.`,
+    (p) => `Convenient, you naming me first.`
+  ];
+  chatSay(target, pick(DEF)(target));
+  if (Math.random() < 0.45 && accuser && !accuser.isYou) return;
+  const crowd = alive().filter((p) => p !== target && !p.isYou);
+  if (!crowd.length) return;
+  const witness = pick(crowd);
+  if (Math.random() < (witness.role === 'mafia' ? 0.8 : 0.5)) {
+    target.heat = (target.heat || 0) + 1.3;
+    chatSay(witness, `I wondered the same thing about ${target.name}.`);
+  } else if (accuser) {
+    accuser.heat = (accuser.heat || 0) + 1.1;
+    chatSay(witness, `${accuser.isYou ? 'You are' : accuser.name + ' is'} very quick to point at people.`);
+  }
+}
+
+/* ============================================================
+   DAY
+   ============================================================ */
+const RUMOURS = [
+  (a, b) => `${nameOf(a)} says ${nameOf(b)} ${b.publicClue}.`,
+  (a, b) => `${nameOf(a)} will not look at ${nameOf(b)} across the table.`,
+  (a, b) => `${nameOf(a)} swears ${nameOf(b)} was never at the card game like they claim.`,
+  (a, b) => `${nameOf(a)} counts the money twice and asks who else has a key.`,
+  (a, b) => `${nameOf(a)} tells the room ${nameOf(b)} smelled of gun oil at Mass.`
+];
+
+function runDay() {
+  S.phase = 'day';
+  ambienceMood('day');
+  announce(`Day ${S.day}. ${alive().length} players still alive. The community centre is open.`);
+  $('phaseTag').textContent = 'Day';
+  $('dayTag').textContent = 'Day ' + S.day;
+  log(`&mdash; Day ${S.day}. Chairs scrape. Everyone talks at once. &mdash;`, 'day');
+  chatSystem(`Day ${S.day}. ${alive().length} people are still alive and all of them are in this room.`);
+
+  const living = alive();
+  const rounds = Math.min(3, Math.max(1, Math.floor(living.length / 3)));
+  for (let i = 0; i < rounds; i++) {
+    const a = pick(living);
+    const b = pick(living.filter((p) => p !== a));
+    if (!b) break;
+    log(pick(RUMOURS)(a, b), 'day');
+    b.heat = (b.heat || 0) + 0.8;
+  }
+
+  /* the one Mafia sometimes trips over their own story */
+  const maf = living.find((p) => p.role === 'mafia' && !p.isYou);
+  if (maf && S.slips && Math.random() < 1.05 - cfg.diff) {
+    maf.heat = (maf.heat || 0) + 2.4;
+    log(pick([
+      `${nameOf(maf)} gives the wrong hour twice, and an old woman by the door notices.`,
+      `Somebody remembers ${nameOf(maf)} was not where they said they were.`,
+      `${nameOf(maf)} answers a question nobody asked yet.`
+    ]), 'kill');
+  }
+
+  aiChatter(Math.min(3, living.length - 1));
+  openFloor();
+}
+
+function openFloor() {
+  if (!S.you.alive) {
+    log('You watch from wherever the dead watch from. The room talks without you.', 'night');
+    showGhostRoom(true);
+    ghostChatter(2);
+    aiChatter(2);
+    return setTimeout(() => callVote(), 700);
+  }
+  S.chatOpen = true;
+  setSpeech([
+    { label: 'Accuse someone', target: true, prompt: 'Point a finger. At whom?', filter: (p) => p.alive && !p.isYou,
+      run: (t) => { chatSay(S.you, `It is ${t.name}. Say where you were last night.`, true); t.heat = (t.heat || 0) + 2.6; t.accusedMafia = true; aiReplyTo(t, S.you); reopen(); } },
+    { label: 'Ask someone to explain themselves', target: true, prompt: 'Whose story does not sit right?', filter: (p) => p.alive && !p.isYou,
+      run: (t) => { chatSay(S.you, `${t.name}, explain slowly how it is that you ${t.publicClue}.`, true); t.heat = (t.heat || 0) + 1.3; aiReplyTo(t, S.you); reopen(); } },
+    { label: 'Defend yourself', run: () => { chatSay(S.you, `I am a ${S.you.job}. I have accounted for my whole evening, twice.`, true); S.you.heat = Math.max(0, (S.you.heat || 0) - 2.2); aiChatter(1); reopen(); } },
+    { label: 'Say nothing and listen', run: () => { S.you.heat = (S.you.heat || 0) + 0.4; aiChatter(2); reopen(); } }
+  ], 'The centre is open. Type what you like, use a line below, then call the vote when the room is ready.');
+  startClock(90, () => { if (S.phase === 'day' && !S.over) { log('Noon comes whether the room is ready or not.', 'day'); callVote(); } });
+}
+
+function reopen() {
+  render();
+  if (S.phase === 'day' && !S.over) setSpeechNote('Keep talking, or call the vote.');
+}
+
+function setSpeechNote(t) { $('actionPrompt').innerHTML = t; }
+
+/* free typing in the community centre */
+function wireChat() {
+  const send = () => {
+    if (!S || S.over || S.paused || !S.chatOpen || !S.you.alive) return;
+    const raw = ($('chatIn').value || '').trim();
+    if (!raw) return;
+    $('chatIn').value = '';
+    const text = escapeText(raw).slice(0, 140);
+    chatSay(S.you, text, true);
+    /* using somebody's name in here counts as pointing at them */
+    const named = alive().filter((p) => !p.isYou && new RegExp('\\b' + p.name.split(' ')[0], 'i').test(raw));
+    named.forEach((p) => {
+      p.heat = (p.heat || 0) + 1.8;
+      if (/mafia|killer|guilty|it is|its |vote/i.test(raw)) p.accusedMafia = true;
+    });
+    if (named.length) aiReplyTo(named[0], S.you);
+    else aiChatter(1);
+    render();
+  };
+  $('btnSay').addEventListener('click', send);
+  $('chatIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+  $('btnCallVote').addEventListener('click', () => {
+    if (!S || S.over || S.paused || S.phase !== 'day') return;
+    callVote();
+  });
+}
+
+function callVote() {
+  S.chatOpen = false;
+  stopClock();
+  setSpeech([]);
+  chatSystem('The room stops writing. Hands only now.');
+  if (S.you.alive) {
+    ask('Noon. The rope is already thrown over the beam. Who hangs?', (p) => p.alive && !p.isYou, (t) => tallyVotes(t), true);
+    startClock(40, () => { if (S.awaiting) { S.awaiting = null; log('You let the clock run out and keep your hand down.', 'day'); tallyVotes(null); } });
+  } else {
+    setTimeout(() => tallyVotes(null), 700);
+  }
+}
+
+/* ============================================================
+   THE VOTE
+   ============================================================ */
+function aiVote(voter, tally) {
+  const options = alive().filter((p) => p !== voter);
+  if (!options.length) return null;
+  return options.map((p) => {
+    let s = Math.random() * 0.9 + (p.heat || 0) * 0.55;
+    if (tally) s += (tally.get(p.id) || 0) * 1.15;      // a mob follows a mob
+    if (voter.role === 'mafia') {
+      if (p.accusedMafia && p.role !== 'mafia') s += 1.6 * cfg.diff;
+      s += (p.talk || 0) * 0.2 * cfg.diff;
+    }
+    if (voter.role === 'nurse' && p.savedByMe) s -= 2 * cfg.diff;
+    return { p, s };
+  }).sort((a, b) => b.s - a.s)[0].p;
+}
+
+function tallyVotes(yourPick) {
+  stopClock();
+  setSpeech([]);
+  const votes = new Map();
+  const add = (t) => { if (t) votes.set(t.id, (votes.get(t.id) || 0) + 1); };
+  if (yourPick) { add(yourPick); log(`You raise your hand against ${nameOf(yourPick)}.`, 'you'); chatSystem(`You vote ${yourPick.name}.`); }
+
+  alive().filter((p) => !p.isYou).forEach((v) => {
+    const t = aiVote(v, votes);
+    add(t);
+    if (t) { log(`${nameOf(v)} votes ${t.name}.`, 'day'); chatSystem(`${v.name} votes ${t.name}.`); }
+  });
+
+  let best = [], top = -1;
+  votes.forEach((c, id) => {
+    if (c > top) { top = c; best = [id]; }
+    else if (c === top) best.push(id);
+  });
+
+  if (!best.length) {
+    log('Not one hand goes up. The rope stays empty and the night comes anyway.', 'night');
+    alive().forEach((p) => p.heat = (p.heat || 0) * 0.5);
+    if (checkEnd()) return;
+    return runNight();
+  }
+  if (best.length > 1) {
+    best.sort((a, b) => (S.players[b].heat || 0) - (S.players[a].heat || 0));
+    if (Math.random() < 0.3) {
+      log('The vote splits down the middle. Nobody hangs, and the night comes anyway.', 'night');
+      chatSystem('The vote is deadlocked. Nobody hangs today.');
+      alive().forEach((p) => p.heat = (p.heat || 0) * 0.5);
+      if (checkEnd()) return;
+      return runNight();
+    }
+    log('The vote is tied. They shout it out over the table until one name is left standing.', 'day');
+    best = [best[0]];
+  }
+
+  const victim = S.players[best[0]];
+  victim.alive = false;
+  sfx('thud');
+  log(`The room takes ${nameOf(victim)} into the square. ${top} hands, one rope. They were <b>${ROLES[victim.role].label}</b>.`, 'kill');
+  log(`Turned out of ${victim.name}\u2019s pockets in front of everyone: ${victim.deathClue}.`, 'day');
+  revealWill(victim);
+  chatSystem(`${victim.name} was hanged by the room. ${victim.name} was ${ROLES[victim.role].label.toLowerCase()}.`);
+  alive().forEach((p) => { p.heat = (p.heat || 0) * 0.4; p.accusedMafia = false; });
+  renderAdmin();
+  render();
+
+  withLastWords(victim, () => {
+    if (checkEnd()) return;
+    runNight();
+  });
+}
+
+/* ============================================================
+   PICKING UI
+   ============================================================ */
+function setSpeech(options, note) {
+  const bar = $('speechbar');
+  if (!bar) return;
+  bar.innerHTML = '';
+  if (note) $('actionPrompt').innerHTML = note;
+  if (!options || !options.length) return;
+  options.forEach((o) => {
+    const b = document.createElement('button');
+    b.className = 'say';
+    b.type = 'button';
+    b.textContent = o.label;
+    b.addEventListener('click', () => {
+      if (S.paused) return;
+      if (o.target) ask(o.prompt, o.filter, o.run);
+      else o.run();
+    });
+    bar.appendChild(b);
+  });
+}
+
+function ask(prompt, filter, onConfirm, isVote) {
+  S.awaiting = { filter, onConfirm };
+  S.choice = null;
+  $('actionPrompt').innerHTML = prompt;
+  announce(prompt);
+  $('btnSkip').style.display = isVote ? '' : 'none';
+  $('btnConfirm').disabled = true;
+  render();
+}
+
+function wireTable() {
+  $('btnConfirm').addEventListener('click', () => {
+    if (!S || S.paused || !S.awaiting || !S.choice) return;
+    const cb = S.awaiting.onConfirm;
+    const t = S.choice;
+    S.awaiting = null; S.choice = null;
+    $('actionPrompt').innerHTML = '&nbsp;';
+    $('btnConfirm').disabled = true;
+    render();
+    cb(t);
+  });
+
+  $('btnSkip').addEventListener('click', () => {
+    if (!S || S.paused || !S.awaiting) return;
+    S.awaiting = null; S.choice = null;
+    stopClock();
+    $('actionPrompt').innerHTML = '&nbsp;';
+    render();
+    log('You keep your hand down and your mouth shut.', 'day');
+    tallyVotes(null);
+  });
+
+  $('btnLastWords').addEventListener('click', () => {
+    if (S && S.lastWordsDone) { const f = S.lastWordsDone; S.lastWordsDone = null; f(); }
+  });
+  $('lastWordsIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnLastWords').click(); });
+}
+
+function render() {
+  renderAdmin();
+  if (S) showGhostRoom(!S.you.alive && !S.over);
+  const wrap = $('seats');
+  wrap.innerHTML = '';
+  $('tableTitle').textContent = `The Table \u2014 ${alive().length} still breathing`;
+
+  S.players.forEach((p) => {
+    const pickable = !!(S.awaiting && S.awaiting.filter(p) && !S.paused);
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.disabled = !pickable;
+    el.setAttribute('aria-pressed', S.choice === p ? 'true' : 'false');
+    el.className = 'seat' + (p.alive ? '' : ' dead') + (pickable ? ' pickable' : '') +
+      (S.choice === p ? ' chosen' : '') + (p.isYou ? ' you' : '');
+
+    const tags = [];
+    if (p.isYou) tags.push(`<span class="mini cool">You \u00B7 ${ROLES[p.role].label}</span>`);
+    if (!p.alive) tags.push(`<span class="mini hot">Dead \u00B7 ${ROLES[p.role].label}</span>`);
+    if (p.alive && !p.isYou) tags.push('<span class="mini cool">Looks like a civilian</span>');
+    if (p.alive && (p.heat || 0) >= 2) tags.push('<span class="mini hot">Under suspicion</span>');
+
+    el.innerHTML = `
+      <span class="seat-head">
+        <span class="face">${avatarSVG(p.look)}</span>
+        <span>
+          <span class="seat-name">${p.name}</span>
+          <span class="seat-sub">${p.job} \u00B7 ${p.trait}</span>
+        </span>
+      </span>
+      <span class="seat-sub" style="display:block;margin-top:10px;text-transform:none;letter-spacing:.02em;color:#8b8579">${p.alive ? 'On the record: ' + p.publicClue + '.' : 'On the body: ' + p.deathClue + '.'}</span>
+      <span class="seat-tags">${tags.join('')}</span>`;
+
+    if (pickable) el.addEventListener('click', () => {
+      S.choice = p;
+      $('btnConfirm').disabled = false;
+      render();
+    });
+    wrap.appendChild(el);
+  });
+}
+
+/* ============================================================
+   THE ADMIN VIEW (two people only)
+   ============================================================ */
+function renderAdmin() {
+  const open = !!adminSession;
+  $('adminGate').hidden = open;
+  $('adminBody').hidden = !open;
+  $('adminBackOnly').hidden = open;
+  if (!open) return;
+  $('adminWho').textContent = S
+    ? `Signed in as ${adminSession} \u00B7 identity withheld \u00B7 case: ${S.mystery}`
+    : `Signed in as ${adminSession} \u00B7 identity withheld \u00B7 no game at the table`;
+  renderInvites();
+  renderHistory();
+  renderAudit();
+  renderLedger();
+  $('adminRoster').innerHTML = !S
+    ? '<div class="rrow"><span class="tiny">No game in progress. The deal appears here once someone sits down.</span></div>'
+    : S.players.map((p) => `
+    <div class="rrow ${p.alive ? '' : 'out'}">
+      <span><b>${p.name}</b>${p.file ? ' \u00B7 registered player' : ''}<br>
+        <span class="tiny">${p.job} \u00B7 secret: ${p.secret}</span>
+        ${p.file ? `<br><span class="tiny">file: @${p.file.user} \u00B7 ${p.file.pronoun} \u00B7 ${p.file.country} \u00B7 adult confirmed</span>` : ''}
+      </span>
+      <span class="rr ${ROLES[p.role].team === 'mafia' ? '' : 'town'}">${ROLES[p.role].label} \u00B7 ${ROLES[p.role].team}${p.alive ? '' : ' \u00B7 dead'}</span>
+    </div>`).join('');
+}
+
+/* ============================================================
+   END OF GAME + STATS
+   ============================================================ */
+function checkEnd() {
+  const m = aliveMafia().length, t = alive().filter((p) => !isMafia(p)).length;
+  if (m === 0) return finish('The Town Survives', 'The last of the family swings at noon. For a while, the streets belong to nobody.');
+  if (m >= t) return finish('The Family Wins', 'There is no one left to accuse. The city keeps paying and learns not to ask.');
+  return false;
+}
+
+function finish(title, sub) {
+  S.over = true;
+  stopClock();
+  setSpeech([]);
+  burnInvite(ticket);
+  const team = ROLES[S.you.role].team;
+  const youWon = (title.startsWith('The Town') && team === 'town') || (title.startsWith('The Family') && team === 'mafia');
+  $('endTitle').textContent = title;
+  $('endSub').textContent = sub + (youWon ? '  You came out on top.' : '  You did not.');
+  $('endSub').className = 'team-line' + (youWon ? ' town' : '');
+  $('endRoster').innerHTML = S.players.map((p) => `
+    <div class="rrow ${p.alive ? '' : 'out'}">
+      <span>${p.alive ? p.face : '\uD83D\uDC80'} <b>${p.name}</b>${p.isYou ? ' (you)' : ''}</span>
+      <span class="rr ${ROLES[p.role].team === 'mafia' ? '' : 'town'}">${ROLES[p.role].label}</span>
+    </div>`).join('');
+  $('phaseTag').textContent = 'Curtain';
+  log(`&mdash; ${title} &mdash;`, 'big');
+  announce(`${title}. ${youWon ? 'You won.' : 'You lost.'}`);
+  sfx('bell');
+  bumpStats(youWon, S.you.role, S.you.alive);
+  fileSession(title, youWon);
+  setTimeout(() => show('screen-end'), 1200);
+  return true;
+}
+
+/* ============================================================
+   PROFILE + STATS PERSISTENCE (this browser only)
+   ============================================================ */
+const PROF_KEY = 'cosanostra.profile.v1';
+const STAT_KEY = 'cosanostra.stats.v1';
+
+function readJSON(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch (e) { return fallback; }
+}
+function writeJSON(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+}
+
+function saveProfile(p) {
+  if (!p || !p.consent) return;
+  writeJSON(PROF_KEY, p);
+}
+
+function loadProfile() {
+  const p = readJSON(PROF_KEY, null);
+  if (!p) return null;
+  const set = (id, v) => { if ($(id) && v != null) $(id).value = v; };
+  ['user','country','pronoun'].forEach((k) => set('pf' + k.charAt(0).toUpperCase() + k.slice(1), p[k]));
+  if ($('pfAdult')) $('pfAdult').checked = !!p.adult;
+  if (p.look) { look = p.look; Object.keys(LOOKSEL).forEach((id) => { if ($(id) && p.look[LOOKSEL[id]] != null) $(id).value = p.look[LOOKSEL[id]]; }); }
+  if ($('pfConsent')) $('pfConsent').checked = true;
+  paintLook();
+  return p;
+}
+
+function bumpStats(won, role, survived) {
+  const s = readJSON(STAT_KEY, { games: 0, wins: 0, survived: 0, roles: {} });
+  s.games++;
+  if (won) s.wins++;
+  if (survived) s.survived++;
+  s.roles[role] = (s.roles[role] || 0) + 1;
+  writeJSON(STAT_KEY, s);
+  paintRecord();
+}
+
+function paintRecord() {
+  const box = $('pfRecord');
+  if (!box) return;
+  const s = readJSON(STAT_KEY, null);
+  const saved = readJSON(PROF_KEY, null);
+  if (!s || !s.games) {
+    box.innerHTML = saved
+      ? '<span class="tiny">Your file is remembered in this browser. No games on the record yet.</span>'
+      : '<span class="tiny">Nothing on file. Tick the box below and the house will remember you next time.</span>';
+    return;
+  }
+  const best = Object.keys(s.roles).sort((a, b) => s.roles[b] - s.roles[a])[0];
+  box.innerHTML = `<span class="tiny"><b>Your record:</b> ${s.games} ${s.games === 1 ? 'game' : 'games'} \u00B7 ` +
+    `${s.wins} won (${Math.round((s.wins / s.games) * 100)}%) \u00B7 walked away alive ${s.survived} ` +
+    `${s.survived === 1 ? 'time' : 'times'} \u00B7 dealt most often as ${ROLES[best] ? ROLES[best].label : best}` +
+    `${saved ? ' \u00B7 file remembered in this browser' : ''}</span>`;
+}
+
+/* ============================================================
+   GAME HISTORY (admins only \u2014 sealed session records)
+   ============================================================ */
+const HIST_KEY = 'cosanostra.history.v1';
+const HIST_MAX = 40;
+
+function stripTags(s) {
+  return String(s).replace(/<[^>]*>/g, '')
+    .replace(/&mdash;/g, '\u2014').replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
+}
+
+function readHistory() {
+  const h = readJSON(HIST_KEY, []);
+  return Array.isArray(h) ? h : [];
+}
+
+function diffName(d) {
+  return d >= 0.85 ? 'Made men' : d >= 0.6 ? 'Wiseguys' : 'Drunks';
+}
+
+/* called once, the moment a game ends */
+function fileSession(title, youWon) {
+  if (!S || !S.record || S.record.filed) return;
+  const r = S.record;
+  r.filed = true;
+  r.ended = new Date().toISOString();
+  r.days = S.day;
+  r.winner = title;
+  r.winningSide = title.indexOf('Family') > -1 ? 'mafia' : 'town';
+  r.youRole = S.you.role;
+  r.youWon = !!youWon;
+  r.youSurvived = !!S.you.alive;
+  r.survivors = S.players.filter((p) => p.alive).map((p) => p.name);
+  r.dead = S.players.filter((p) => !p.alive).map((p) => p.name);
+  r.seats.forEach((seat, i) => { seat.alive = S.players[i].alive; });
+
+  const all = readHistory();
+  all.unshift(r);
+  while (all.length > HIST_MAX) all.pop();
+  writeJSON(HIST_KEY, all);
+  renderHistory();
+}
+
+let histOpen = {};      // which sessions are expanded
+let histClearArmed = false;
+
+function renderHistory() {
+  const box = $('adminHistory');
+  if (!box) return;
+  const all = readHistory();
+  const count = $('histCount');
+  if (count) count.textContent = all.length
+    ? `${all.length} session${all.length === 1 ? '' : 's'} on file \u00B7 newest first \u00B7 the house keeps the last ${HIST_MAX}`
+    : 'No finished sessions on file yet.';
+
+  if (!all.length) {
+    box.innerHTML = '<div class="rrow"><span class="tiny">Nothing archived. Every game that reaches an ending is written here automatically.</span></div>';
+    return;
+  }
+
+  box.innerHTML = all.map((g, idx) => {
+    const when = new Date(g.started);
+    const stamp = isNaN(when.getTime()) ? g.started : when.toLocaleString();
+    const open = !!histOpen[g.id];
+    const mafia = (g.seats || []).find((s) => s.role === 'mafia');
+    const nurse = (g.seats || []).find((s) => s.role === 'nurse');
+
+    const head = `
+      <div class="histhead">
+        <span>
+          <b>${stamp}</b>
+          <span class="tiny">${g.size} at the table \u00B7 ${diffName(g.difficulty)} \u00B7 ${g.days} ${g.days === 1 ? 'day' : 'days'} \u00B7 case: ${g.mystery || 'unrecorded'}</span>
+          <span class="tiny">Mafia: <b>${mafia ? mafia.name : '?'}</b> \u00B7 Nurse: <b>${nurse ? nurse.name : '?'}</b> \u00B7 player sat as ${ROLES[g.youRole] ? ROLES[g.youRole].label : g.youRole}</span>
+        </span>
+        <span class="histright">
+          <span class="rr ${g.winningSide === 'mafia' ? '' : 'town'}">${g.winner}</span>
+          <button class="ghost tiny-btn" data-hist="${g.id}">${open ? 'Hide transcript' : 'Open transcript'}</button>
+        </span>
+      </div>`;
+
+    if (!open) return `<div class="histrow">${head}</div>`;
+
+    const seats = (g.seats || []).map((s) => `
+      <div class="rrow ${s.alive ? '' : 'out'}">
+        <span><b>${s.name}</b>${s.isYou ? ' (the player)' : ''}${s.file ? ' \u00B7 registered' : ''}<br>
+          <span class="tiny">${s.job} \u00B7 secret: ${s.secret}</span>
+          ${s.file ? `<br><span class="tiny">file: @${s.file.user} \u00B7 ${s.file.country}</span>` : ''}
+        </span>
+        <span class="rr ${ROLES[s.role] && ROLES[s.role].team === 'mafia' ? '' : 'town'}">${ROLES[s.role] ? ROLES[s.role].label : s.role}${s.alive ? '' : ' \u00B7 dead'}</span>
+      </div>`).join('');
+
+    const events = (g.events || []).map((e) => `
+      <div class="entry ${e.kind}"><span class="tiny">Day ${e.day} \u00B7 ${e.phase}</span> ${e.text}</div>`).join('') ||
+      '<div class="entry"><span class="tiny">No transcript stored for this session.</span></div>';
+
+    return `<div class="histrow open">${head}
+      <div class="histbody">
+        <h4 class="tiny">The deal</h4>
+        <div class="roster">${seats}</div>
+        <h4 class="tiny">Everything that was said and done</h4>
+        <div class="log short">${events}</div>
+      </div></div>`;
+  }).join('');
+
+  box.querySelectorAll('[data-hist]').forEach((b) => b.addEventListener('click', () => {
+    const id = b.getAttribute('data-hist');
+    histOpen[id] = !histOpen[id];
+    renderHistory();
+  }));
+}
+
+function exportHistory(asText) {
+  const all = readHistory();
+  if (!all.length) { $('histMsg').textContent = 'Nothing to hand over yet.'; return; }
+  const note = `${all.length} session${all.length === 1 ? '' : 's'} written out.`;
+  if (asText) downloadBlob(historyAsText(), 'text/plain', 'cosanostra-history.txt', note);
+  else downloadBlob(JSON.stringify(all, null, 2), 'application/json', 'cosanostra-history.json', note);
+}
+
+function wireHistory() {
+  const open = $('btnHistOpen'), clear = $('btnHistClear'), out = $('btnHistExport');
+  if (open) open.addEventListener('click', () => {
+    histOpen = {};
+    readHistory().forEach((g) => { histOpen[g.id] = true; });
+    renderHistory();
+  });
+  if (out) out.addEventListener('click', () => exportHistory(false));
+  const txt = $('btnHistText');
+  if (txt) txt.addEventListener('click', () => exportHistory(true));
+  if (clear) clear.addEventListener('click', () => {
+    if (!histClearArmed) {
+      histClearArmed = true;
+      clear.textContent = 'Burn It \u2014 Are You Sure?';
+      $('histMsg').textContent = 'This deletes every archived session in this browser and cannot be undone. Press again to confirm.';
+      return;
+    }
+    histClearArmed = false;
+    clear.textContent = 'Burn The Archive';
+    try { localStorage.removeItem(HIST_KEY); } catch (e) {}
+    histOpen = {};
+    renderHistory();
+    $('histMsg').textContent = 'The archive is ash.';
+  });
+  renderHistory();
+}
+
+/* ============================================================
+   THE ADMIN DOOR
+   The passphrases are not in this file. Only their SHA-256
+   fingerprints are, so reading the source no longer hands you
+   the keys \u2014 though a determined attacker can still guess a weak
+   phrase offline. A real house keeps this check on a server.
+   ============================================================ */
+const ADMIN_HASHES = {
+  '190f7d436bc77ad04c3954c71108f2e3021707191f750be5098f7cbd55fc7f11': 'Admin 1',
+  'bd4d448417173c275202b1351189aa4b512da1f49c18a609a1f03604bf844255': 'Admin 2'
+};
+
+async function sha256Hex(text) {
+  const subtle = window.crypto && (window.crypto.subtle || window.crypto.webkitSubtle);
+  if (!subtle) return null;
+  const bytes = new TextEncoder().encode(text);
+  const digest = await subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+let adminTries = 0;
+let adminLockUntil = 0;
+
+function wireAdminGate() {
+  const btn = $('btnAdmin'), field = $('adminCode'), msg = $('adminMsg');
+  if (!btn || !field) return;
+
+  const tryIn = async () => {
+    if (Date.now() < adminLockUntil) {
+      msg.textContent = `Too many wrong answers. Wait ${Math.ceil((adminLockUntil - Date.now()) / 1000)} seconds.`;
+      return;
+    }
+    const phrase = (field.value || '').trim();
+    if (!phrase) { msg.textContent = 'Say the phrase.'; return; }
+    const hash = await sha256Hex('cosanostra.v1::' + phrase);
+    field.value = '';
+    const who = hash && ADMIN_HASHES[hash];
+    if (!who) {
+      adminTries++;
+      if (adminTries >= 5) { adminLockUntil = Date.now() + 30000; adminTries = 0; }
+      msg.textContent = hash === null
+        ? 'This browser will not do the check. Open the file over https or localhost.'
+        : 'Wrong phrase. The door stays shut.';
+      return;
+    }
+    adminTries = 0;
+    adminSession = who;
+    msg.textContent = '';
+    auditNote(who, 'unsealed the records');
+    renderAdmin();
+  };
+
+  btn.addEventListener('click', tryIn);
+  field.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryIn(); });
+
+  const out = $('btnAdminOut');
+  if (out) out.addEventListener('click', () => {
+    if (adminSession) auditNote(adminSession, 'resealed the records');
+    adminSession = null;
+    renderAdmin();
+    show(adminReturnTo);
+  });
+}
+
+/* ---------- audit trail: what the two of them did, and when ---------- */
+const AUDIT_KEY = 'cosanostra.audit.v1';
+const AUDIT_MAX = 120;
+
+function auditNote(who, what) {
+  const all = readJSON(AUDIT_KEY, []);
+  const list = Array.isArray(all) ? all : [];
+  list.unshift({ at: new Date().toISOString(), who: who || 'unknown', what });
+  while (list.length > AUDIT_MAX) list.pop();
+  writeJSON(AUDIT_KEY, list);
+  renderAudit();
+}
+
+function renderAudit() {
+  const box = $('adminAudit');
+  if (!box) return;
+  const list = readJSON(AUDIT_KEY, []);
+  if (!list || !list.length) {
+    box.innerHTML = '<div class="rrow"><span class="tiny">Nothing logged yet. Every unsealing, invitation and freeze is written here.</span></div>';
+    return;
+  }
+  box.innerHTML = list.map((e) => {
+    const d = new Date(e.at);
+    const stamp = isNaN(d.getTime()) ? e.at : d.toLocaleString();
+    return `<div class="rrow"><span><b>${e.who}</b> ${e.what}</span><span class="tiny">${stamp}</span></div>`;
+  }).join('');
+}
+
+/* ============================================================
+   THE LEDGER OF PLAY \u2014 numbers pulled out of the history log
+   ============================================================ */
+function historyStats() {
+  const all = readHistory();
+  const out = {
+    games: all.length, townWins: 0, mafiaWins: 0, days: 0,
+    roles: {}, wins: {}, survived: {}, longest: 0, shortest: 0
+  };
+  all.forEach((g) => {
+    if (g.winningSide === 'mafia') out.mafiaWins++; else out.townWins++;
+    out.days += g.days || 0;
+    out.longest = Math.max(out.longest, g.days || 0);
+    out.shortest = out.shortest ? Math.min(out.shortest, g.days || 0) : (g.days || 0);
+    const r = g.youRole || 'civilian';
+    out.roles[r] = (out.roles[r] || 0) + 1;
+    if (g.youWon) out.wins[r] = (out.wins[r] || 0) + 1;
+    if (g.youSurvived) out.survived[r] = (out.survived[r] || 0) + 1;
+  });
+  return out;
+}
+
+function renderLedger() {
+  const box = $('adminStats');
+  if (!box) return;
+  const s = historyStats();
+  if (!s.games) {
+    box.innerHTML = '<div class="rrow"><span class="tiny">No finished games to count yet.</span></div>';
+    return;
+  }
+  const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+  const bar = (label, a, b, tone) => `
+    <div class="statline">
+      <span class="tiny">${label}</span>
+      <span class="barwrap"><span class="bar ${tone || ''}" style="width:${pct(a, b)}%"></span></span>
+      <span class="tiny num">${a}/${b} \u00B7 ${pct(a, b)}%</span>
+    </div>`;
+
+  const roleRows = ['mafia', 'nurse', 'civilian'].map((r) => {
+    const dealt = s.roles[r] || 0;
+    if (!dealt) return '';
+    return bar(`Sat as ${ROLES[r].label} \u2014 won`, s.wins[r] || 0, dealt, r === 'mafia' ? '' : 'town') +
+           bar(`Sat as ${ROLES[r].label} \u2014 walked away alive`, s.survived[r] || 0, dealt, 'cool');
+  }).join('');
+
+  box.innerHTML = `
+    <div class="rrow"><span class="tiny"><b>${s.games}</b> archived ${s.games === 1 ? 'game' : 'games'} \u00B7 average length <b>${(s.days / s.games).toFixed(1)}</b> days \u00B7 shortest ${s.shortest} \u00B7 longest ${s.longest}</span></div>
+    ${bar('The town survived', s.townWins, s.games, 'town')}
+    ${bar('The family won', s.mafiaWins, s.games, '')}
+    ${roleRows}`;
+}
+
+/* ---------- transcripts an admin can actually read ---------- */
+function historyAsText() {
+  const all = readHistory();
+  return all.map((g) => {
+    const when = new Date(g.started);
+    const head = [
+      '='.repeat(64),
+      `SESSION ${g.id}`,
+      `Started: ${isNaN(when.getTime()) ? g.started : when.toLocaleString()}`,
+      `Table: ${g.size} \u00B7 Difficulty: ${diffName(g.difficulty)} \u00B7 Lasted: ${g.days} day(s)`,
+      `Case: ${g.mystery || 'unrecorded'}`,
+      `Result: ${g.winner} \u00B7 the player sat as ${ROLES[g.youRole] ? ROLES[g.youRole].label : g.youRole} and ${g.youWon ? 'won' : 'lost'}, ${g.youSurvived ? 'alive at the end' : 'dead by the end'}`,
+      '',
+      'THE DEAL',
+      ...(g.seats || []).map((s) => `  ${s.name}${s.isYou ? ' (the player)' : ''} \u2014 ${ROLES[s.role] ? ROLES[s.role].label : s.role} \u00B7 ${s.job} \u00B7 ${s.alive ? 'survived' : 'died'} \u00B7 secret: ${s.secret}`),
+      '',
+      'TRANSCRIPT'
+    ];
+    const body = (g.events || []).map((e) => `  [day ${e.day} \u00B7 ${e.phase}] ${e.text}`);
+    return head.concat(body, '').join('\n');
+  }).join('\n');
+}
+
+function downloadBlob(text, type, filename, note) {
+  const blob = new Blob([text], { type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  if ($('histMsg')) $('histMsg').textContent = note;
+}
+
+/* ---------- said out loud for screen readers ---------- */
+function announce(text) {
+  const live = $('liveRegion');
+  if (!live) return;
+  live.textContent = '';
+  live.textContent = stripTags(text);
+}
+
+/* ---------- volume and motion ---------- */
+function prefersLessMotion() {
+  try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+  catch (e) { return false; }
+}
+
+function applyMotionPreference() {
+  const off = prefersLessMotion() || (readJSON(MOTION_KEY, null) === true);
+  if (document.body && document.body.classList) document.body.classList[off ? 'add' : 'remove']('stillness');
+  const box = $('motionOff');
+  if (box) box.checked = off;
+}
+
+const MOTION_KEY = 'cosanostra.stillness.v1';
+const VOL_KEY = 'cosanostra.volume.v1';
+
+function setVolume(v) {
+  snd.volume = Math.max(0, Math.min(1, v));
+  writeJSON(VOL_KEY, snd.volume);
+  if (snd.gain) snd.gain.gain.value = snd.volume;
+  const out = $('volOut');
+  if (out) out.textContent = Math.round(snd.volume * 100) + '%';
+}
+
+function wireComfort() {
+  const saved = readJSON(VOL_KEY, null);
+  snd.volume = typeof saved === 'number' ? saved : 0.5;
+  const slider = $('volume');
+  if (slider) {
+    slider.value = String(Math.round(snd.volume * 100));
+    slider.addEventListener('input', (e) => setVolume(+e.target.value / 100));
+  }
+  setVolume(snd.volume);
+  const box = $('motionOff');
+  if (box) box.addEventListener('change', () => {
+    writeJSON(MOTION_KEY, !!box.checked);
+    applyMotionPreference();
+  });
+  applyMotionPreference();
+}
+
+function forgetMe() {
+  try { localStorage.removeItem(PROF_KEY); localStorage.removeItem(STAT_KEY); } catch (e) {}
+  ['pfUser','pfCountry'].forEach((id) => { if ($(id)) $(id).value = ''; });
+  if ($('pfAdult')) $('pfAdult').checked = false;
+  if ($('pfConsent')) $('pfConsent').checked = false;
+  profile = null;
+  $('userTag').hidden = true;
+  paintRecord();
+  $('pfMsg').textContent = 'Wiped. Nothing of yours is left in this browser.';
+}
+
+/* ============================================================
+   MODERATION (admins only)
+   ============================================================ */
+function adminNote(text) {
+  const box = $('adminLog');
+  if (!box) return;
+  const d = document.createElement('div');
+  d.className = 'entry day';
+  d.innerHTML = text;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+
+function wireModeration() {
+  $('btnPause').addEventListener('click', () => {
+    if (!adminSession || !S || S.over) { $('modMsg').textContent = 'Nothing at the table to freeze.'; return; }
+    S.paused = !S.paused;
+    $('btnPause').textContent = S.paused ? 'Let The Room Breathe' : 'Freeze The Room';
+    $('modMsg').textContent = S.paused ? 'The room is frozen. Nobody can act.' : 'Play resumes.';
+    log(S.paused ? '&mdash; The room freezes. Somebody with a key is watching. &mdash;'
+                 : '&mdash; The room breathes again. &mdash;', 'big');
+    adminNote(`${adminSession} ${S.paused ? 'froze' : 'resumed'} the table.`);
+    auditNote(adminSession, S.paused ? 'froze the room mid-game' : 'let the room breathe again');
+    render();
+  });
+}
+
+/* ============================================================
+   INVITATION LINKS
+   An admin sends a link; the code is claimed on arrival and the
+   guest lands straight in the flow, no typing.
+   ============================================================ */
+function inviteLinkFor(code) {
+  const base = location.href.split('#')[0].split('?')[0];
+  return `${base}?invite=${encodeURIComponent(code)}`;
+}
+
+function codeFromURL() {
+  const q = new URLSearchParams(location.search || '');
+  let c = q.get('invite');
+  if (!c && location.hash) {
+    const h = new URLSearchParams(location.hash.replace(/^#/, ''));
+    c = h.get('invite');
+  }
+  return c;
+}
+
+function scrubURL() {
+  try {
+    if (history.replaceState) history.replaceState(null, '', location.href.split('?')[0].split('#')[0]);
+  } catch (e) {}
+}
+
+function autoClaimFromLink() {
+  const raw = codeFromURL();
+  if (!raw) return;
+  const res = claimInvite(raw);
+  scrubURL();
+  if (!res.ok) { $('inviteMsg').textContent = res.msg; return; }
+  ticket = res.code;
+  renderInvites();
+  $('inviteMsg').textContent = '';
+  const ready = profile || loadProfile();
+  if (ready) {
+    profile = ready;
+    $('userTag').hidden = false;
+    $('userTag').textContent = '@' + profile.user;
+    gotoRules();
+  } else {
+    show('screen-profile');
+  }
+}
+
+/* ============================================================
+   THE RULES (nobody sits down without reading them)
+   ============================================================ */
+let rulesRead = false;
+let rulesBack = 'screen-setup';
+
+function gotoRules() {
+  if (rulesRead) return show('screen-setup');
+  rulesBack = 'screen-setup';
+  show('screen-rules');
+}
+
+function wireRules() {
+  const ok = $('rulesOK'), btn = $('btnRules');
+  if (!ok || !btn) return;
+  const sync = () => { btn.disabled = !ok.checked; };
+  ok.addEventListener('change', sync);
+  sync();
+  btn.addEventListener('click', () => {
+    if (!ok.checked) { $('rulesMsg').textContent = 'Tick the box first. Everybody at this table has read the rules.'; return; }
+    $('rulesMsg').textContent = '';
+    rulesRead = true;
+    show(rulesBack);
+  });
+  const top = $('btnTopRules');
+  if (top) top.addEventListener('click', () => {
+    rulesBack = activeScreen || 'screen-setup';
+    if (rulesBack === 'screen-rules') return;
+    show('screen-rules');
+  });
+}
+
+/* ---------- boot ---------- */
+initProfileUI();
+wireSound();
+wireTable();
+wireRules();
+wireHistory();
+wireAdminGate();
+wireWill();
+wireGhostChat();
+wireComfort();
+wireChat();
+wireModeration();
+renderAdmin();
+show('screen-gate');
+autoClaimFromLink();
+
+</script>
+</body>
+</html>
