@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: cosa-nostra
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cosa-nostra-db
+          property: connectionString
+      - key: ADMIN_KEY
+        generateValue: true
+      - key: INVITE_CODES
+        sync: false
+      - key: PHASE_MS
+        value: "90000"
+
+databases:
+  - name: cosa-nostra-db
+    databaseName: cosa_nostra
+    user: cosa_nostra

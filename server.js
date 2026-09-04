@@ -1,165 +1,41 @@
-/* Cosa Nostra - optional multiplayer relay
- *
- * Real multiplayer cannot live inside a single HTML file: browsers cannot
- * accept incoming connections, so a shared room needs a process that both
- * players can reach. This is that process, kept deliberately small.
- *
- * Run it:
- *     npm init -y && npm install ws@8.18.0
- *     node server.js            # listens on port 8787
- *
- * The game file stays fully playable offline against the house AI. This
- * relay only matters if you want several humans at the same table.
- *
- * SECURITY NOTES - read before putting this on the open internet:
- *   - Traffic is plain ws:// here. Put it behind a TLS terminator
- *     (nginx / Caddy) and use wss:// for anything public.
- *   - The only door check is the invitation code, and codes are handed out
- *     by whoever runs the server. There is no account system, no password,
- *     no rate limiting beyond the basics below.
- *   - Anything a client sends is untrusted. This relay never evaluates it;
- *     it forwards text fields only, capped in length.
- */
-
 'use strict';
-
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
-const { WebSocketServer } = require('ws');
-
-const PORT = Number(process.env.PORT || 8787);
-const MAX_ROOM = 14;
-const MAX_TEXT = 400;
-const MAX_MSGS_PER_10S = 25;
-
-/** roomId -> { code, players: Map<id, {ws, name, alive}> } */
-const rooms = new Map();
-let nextId = 1;
-
-function clean(v, max) {
-  return String(v == null ? '' : v).replace(/[\u0000-\u001f<>]/g, '').slice(0, max || MAX_TEXT);
+const http=require('http');const fs=require('fs');const path=require('path');const crypto=require('crypto');const {WebSocketServer}=require('ws');
+const {Pool}=require('pg');
+const PORT=Number(process.env.PORT||8787), MAX_ROOM=14, MIN_PLAYERS=4, MAX_TEXT=500, PHASE_MS=process.env.PHASE_MS?Number(process.env.PHASE_MS):90000;
+const PUBLIC=path.join(__dirname,'public');const rooms=new Map();const usedInvites=new Set();
+const configured=(process.env.INVITE_CODES||'').split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);const invites=new Set(configured);
+const ADMIN_KEY=process.env.ADMIN_KEY||'';
+const pool=process.env.DATABASE_URL?new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}}):null;
+async function db(q,params=[]){if(!pool)return null;return pool.query(q,params)}
+async function initDb(){if(!pool)return;await db(`CREATE TABLE IF NOT EXISTS invites(code TEXT PRIMARY KEY, used_at TIMESTAMPTZ); CREATE TABLE IF NOT EXISTS game_history(id BIGSERIAL PRIMARY KEY, room_id TEXT NOT NULL, started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), ended_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), winner TEXT, players JSONB NOT NULL DEFAULT '[]'::jsonb);`);}
+async function loadInvites(){if(!pool)return;const {rows}=await db('SELECT code FROM invites WHERE used_at IS NULL');for(const x of rows){invites.add(x.code)}}
+async function markInviteUsed(code){if(pool)await db('UPDATE invites SET used_at=NOW() WHERE code=$1',[code])}
+async function saveInvite(code){if(pool)await db('INSERT INTO invites(code) VALUES($1) ON CONFLICT DO NOTHING',[code])}
+async function saveHistory(r){if(!pool)return;const players=[...r.players.values()].map(x=>({name:x.name,username:x.username,age:x.age,country:x.country,state:x.state,gender:x.gender,pronouns:x.pronouns,alive:x.alive,role:x.role}));await db('INSERT INTO game_history(room_id,winner,players) VALUES($1,$2,$3)',[r.id,r.winner,JSON.stringify(players)])}
+function clean(v,n=MAX_TEXT){return String(v??'').replace(/[\u0000-\u001f<>]/g,'').trim().slice(0,n)}
+function id(){return crypto.randomBytes(8).toString('hex')}
+function send(ws,o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
+function broadcast(r,o){for(const p of r.players.values())send(p.ws,o)}
+function publicPlayer(p){return {id:p.id,name:p.name,username:p.username,age:p.age,country:p.country,state:p.state,gender:p.gender,pronouns:p.pronouns,alive:p.alive,role:p.role==='mafia'||p.role==='nurse'?undefined:p.role}}
+function stateFor(r,p){
+ const players=[...r.players.values()].map(publicPlayer); const me=r.players.get(p.id);
+ const privateData={id:me.id,role:me.role||null,alive:me.alive};
+ if(me.role==='mafia') privateData.nightTargets=players.filter(x=>x.alive&&x.id!==me.id).map(x=>({id:x.id,name:x.name}));
+ if(me.role==='nurse') privateData.nightTargets=players.filter(x=>x.alive).map(x=>({id:x.id,name:x.name}));
+ return {type:'state',room:{id:r.id,started:r.started,phase:r.phase,day:r.day,endsAt:r.endsAt,hostId:r.hostId,minPlayers:MIN_PLAYERS,maxPlayers:MAX_ROOM},players,me:privateData,chat:r.chat.slice(-80),winner:r.winner||null,log:r.log.slice(-30)};
 }
-
-function send(ws, obj) {
-  if (ws.readyState === 1) ws.send(JSON.stringify(obj));
-}
-
-function broadcast(room, obj, exceptId) {
-  for (const [id, p] of room.players) if (id !== exceptId) send(p.ws, obj);
-}
-
-function roster(room) {
-  return [...room.players].map(([id, p]) => ({ id, name: p.name, alive: p.alive }));
-}
-
-/* The relay also serves the game itself, so one deployment gives you one URL:
-   the page loads over https and the room connects back over wss on the same
-   host. Nothing else is served - only this single file. */
-const GAME_FILE = path.join(__dirname, 'mafia-simulator.html');
-
-const server = http.createServer((req, res) => {
-  const url = (req.url || '/').split('?')[0];
-  if (url === '/health') {
-    res.writeHead(200, { 'content-type': 'text/plain' });
-    res.end('ok\n');
-    return;
-  }
-  if (url !== '/' && url !== '/index.html') {
-    res.writeHead(404, { 'content-type': 'text/plain' });
-    res.end('Not found\n');
-    return;
-  }
-  fs.readFile(GAME_FILE, (err, body) => {
-    if (err) {
-      res.writeHead(500, { 'content-type': 'text/plain' });
-      res.end('mafia-simulator.html is missing next to server.js\n');
-      return;
-    }
-    res.writeHead(200, {
-      'content-type': 'text/html; charset=utf-8',
-      'cache-control': 'no-cache',
-      'x-content-type-options': 'nosniff',
-      'referrer-policy': 'no-referrer'
-    });
-    res.end(body);
-  });
-});
-
-const wss = new WebSocketServer({ server });
-
-wss.on('connection', (ws) => {
-  const me = { id: nextId++, room: null, window: [], joined: false };
-
-  ws.on('message', (raw) => {
-    // crude flood guard
-    const now = Date.now();
-    me.window = me.window.filter((t) => now - t < 10000);
-    me.window.push(now);
-    if (me.window.length > MAX_MSGS_PER_10S) { ws.close(1008, 'too chatty'); return; }
-
-    let msg;
-    try { msg = JSON.parse(String(raw).slice(0, 4000)); } catch (e) { return; }
-    if (!msg || typeof msg.type !== 'string') return;
-
-    if (msg.type === 'join') {
-      if (me.joined) return;
-      const roomId = clean(msg.room, 40) || 'table';
-      const code = clean(msg.code, 40);
-      if (!code) { send(ws, { type: 'refused', why: 'An invitation code is required.' }); return; }
-
-      let room = rooms.get(roomId);
-      if (!room) { room = { code, players: new Map() }; rooms.set(roomId, room); }
-      if (room.code !== code) { send(ws, { type: 'refused', why: 'That code does not open this table.' }); return; }
-      if (room.players.size >= MAX_ROOM) { send(ws, { type: 'refused', why: 'The table is full.' }); return; }
-
-      me.room = roomId;
-      me.joined = true;
-      room.players.set(me.id, { ws, name: clean(msg.name, 24) || ('Guest ' + me.id), alive: true });
-      send(ws, { type: 'welcome', you: me.id, room: roomId, players: roster(room) });
-      broadcast(room, { type: 'players', players: roster(room) }, null);
-      return;
-    }
-
-    const room = me.joined && rooms.get(me.room);
-    if (!room) return;
-
-    switch (msg.type) {
-      case 'say':
-        broadcast(room, { type: 'say', from: me.id, text: clean(msg.text) }, null);
-        break;
-      case 'vote':
-        broadcast(room, { type: 'vote', from: me.id, target: Number(msg.target) || 0 }, null);
-        break;
-      case 'night':
-        // private move: only the sender's own client and the host tally see it
-        broadcast(room, { type: 'night', from: me.id, act: clean(msg.act, 16), target: Number(msg.target) || 0 }, me.id);
-        break;
-      case 'state':
-        // the host client mirrors authoritative state to everyone else
-        broadcast(room, { type: 'state', payload: msg.payload }, me.id);
-        break;
-      case 'dead':
-        {
-          const p = room.players.get(me.id);
-          if (p) p.alive = false;
-          broadcast(room, { type: 'players', players: roster(room) }, null);
-        }
-        break;
-      default:
-        break;
-    }
-  });
-
-  ws.on('close', () => {
-    const room = rooms.get(me.room);
-    if (!room) return;
-    room.players.delete(me.id);
-    if (!room.players.size) rooms.delete(me.room);
-    else broadcast(room, { type: 'players', players: roster(room) }, null);
-  });
-});
-
-server.listen(PORT, () => {
-  console.log('Cosa Nostra relay listening on ws://localhost:' + PORT);
-});
+function pushState(r){for(const p of r.players.values())send(p.ws,stateFor(r,p))}
+function alive(r){return [...r.players.values()].filter(p=>p.alive)}
+function checkWin(r){const a=alive(r),m=a.filter(p=>p.role==='mafia').length,t=a.length-m;if(m===0)return 'civilians';if(m>=t)return 'mafia';return null}
+function endGame(r,w){r.winner=w;r.started=false;r.phase='ended';r.endsAt=0;r.log.push(`${w==='mafia'?'The Mafia':'The civilians'} won.`);saveHistory(r).catch(()=>{});pushState(r)}
+function beginPhase(r,phase){r.phase=phase;r.endsAt=Date.now()+PHASE_MS;r.votes=new Map();r.mafiaTarget=null;r.nurseTarget=null;r.log.push(phase==='night'?`Night ${r.day+1} begins.`:`Day ${r.day} begins.`);pushState(r)}
+function resolveNight(r){const target=r.mafiaTarget,save=r.nurseTarget;if(target){const p=r.players.get(target);if(p&&p.alive&&target!==save){p.alive=false;r.log.push(`${p.name} was found dead at dawn.`)}}const w=checkWin(r);if(w)return endGame(r,w);r.day++;beginPhase(r,'day')}
+function resolveVote(r){const counts=new Map();for(const v of r.votes.values())counts.set(v,(counts.get(v)||0)+1);let top=0,candidates=[];for(const [pid,n] of counts){if(n>top){top=n;candidates=[pid]}else if(n===top)candidates.push(pid)}if(top&&candidates.length===1){const p=r.players.get(candidates[0]);if(p&&p.alive){p.alive=false;r.log.push(`${p.name} was voted out.`)}}else r.log.push('The vote ended in a deadlock.');const w=checkWin(r);if(w)return endGame(r,w);beginPhase(r,'night')}
+function tick(r){if(!r.started)return;if(Date.now()<r.endsAt)return;if(r.phase==='night')resolveNight(r);else if(r.phase==='day')resolveVote(r)}
+setInterval(()=>{for(const r of rooms.values())tick(r)},1000);
+function joinRoom(ws,msg){const roomId=clean(msg.room,30).toUpperCase()||crypto.randomBytes(3).toString('hex').toUpperCase();const code=clean(msg.invite,40).toUpperCase();if(!code||(!invites.has(code)&&!usedInvites.has(code)))return send(ws,{type:'error',message:'Invalid or already used invitation code.'});if(usedInvites.has(code))return send(ws,{type:'error',message:'That invitation has already been used.'});let r=rooms.get(roomId);if(!r){r={id:roomId,hostId:null,players:new Map(),chat:[],log:[],started:false,phase:'lobby',day:0,endsAt:0,votes:new Map(),winner:null,mafiaTarget:null,nurseTarget:null};rooms.set(roomId,r)}if(r.players.size>=MAX_ROOM)return send(ws,{type:'error',message:'This room is full.'});const profile=msg.profile||{};const p={ws,id:id(),name:clean(profile.name,50)||'Guest',username:clean(profile.username,30)||'guest',age:clean(profile.age,3),state:clean(profile.state,40),country:clean(profile.country,40),gender:clean(profile.gender,20),pronouns:clean(profile.pronouns,20),alive:true,role:null};if(r.started)return send(ws,{type:'error',message:'The game has already started.'});r.players.set(p.id,p);if(!r.hostId)r.hostId=p.id;usedInvites.add(code);invites.delete(code);markInviteUsed(code).catch(()=>{});ws.player=p;ws.room=r;send(ws,{type:'joined',playerId:p.id,room:r.id});broadcast(r,{type:'system',message:`${p.name} joined the table.`});pushState(r)}
+function startGame(r,p){if(r.hostId!==p.id)return send(p.ws,{type:'error',message:'Only the room host can start the game.'});if(r.players.size<MIN_PLAYERS)return send(p.ws,{type:'error',message:`You need at least ${MIN_PLAYERS} players.`});const ps=[...r.players.values()];const roles=Array(ps.length-2).fill('civilian').concat(['mafia','nurse']);for(let i=roles.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[roles[i],roles[j]]=[roles[j],roles[i]]}ps.forEach((x,i)=>{x.role=roles[i];x.alive=true});r.started=true;r.day=1;r.winner=null;r.log.push('The table is sealed. Roles have been dealt privately.');beginPhase(r,'night')}
+function handle(ws,msg){if(!msg||typeof msg!=='object')return; if(msg.type==='join')return joinRoom(ws,msg);const p=ws.player,r=ws.room;if(!p||!r)return send(ws,{type:'error',message:'Join a room first.'});if(msg.type==='chat'){if(!p.alive)return;const text=clean(msg.text);if(!text)return;r.chat.push({id:id(),name:p.name,text,at:Date.now()});broadcast(r,{type:'chat',message:{name:p.name,text,at:Date.now()}});return}if(msg.type==='start')return startGame(r,p);if(msg.type==='nightAction'){if(!r.started||r.phase!=='night'||!p.alive)return;if(p.role==='mafia'){const t=clean(msg.target,40);if(r.players.has(t)&&r.players.get(t).alive&&t!==p.id)r.mafiaTarget=t}if(p.role==='nurse'){const t=clean(msg.target,40);if(r.players.has(t)&&r.players.get(t).alive)r.nurseTarget=t}send(p.ws,{type:'notice',message:'Your night action is locked in.'});return}if(msg.type==='vote'){if(!r.started||r.phase!=='day'||!p.alive)return;const t=clean(msg.target,40);if(r.players.has(t)&&r.players.get(t).alive&&t!==p.id)r.votes.set(p.id,t);send(p.ws,{type:'notice',message:'Your vote is locked in.'});return}}
+const server=http.createServer((req,res)=>{const u=(req.url||'/').split('?')[0];if(u==='/health'){res.writeHead(200,{'content-type':'text/plain'});return res.end('ok\n')}if(u==='/api/rooms'){const list=[...rooms.values()].filter(r=>r.players.size).map(r=>({id:r.id,players:r.players.size,max:MAX_ROOM,started:r.started}));res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});return res.end(JSON.stringify(list))}if(u==='/api/admin/invites'&&req.method==='POST'){let body='';req.on('data',d=>body+=d);req.on('end',()=>{try{const x=JSON.parse(body);if(!ADMIN_KEY||x.key!==ADMIN_KEY){res.writeHead(401);return res.end('Unauthorized')}const count=Math.min(100,Math.max(1,Number(x.count)||1));const out=[];for(let i=0;i<count;i++){let c=crypto.randomBytes(5).toString('hex').toUpperCase();while(invites.has(c)||usedInvites.has(c))c=crypto.randomBytes(5).toString('hex').toUpperCase();invites.add(c);saveInvite(c).catch(()=>{});out.push(c)}res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify({codes:out}))}catch{res.writeHead(400);res.end('Bad request')}});return}let file=u==='/'||u==='/index.html'?'index.html':u==='/game'||u==='/game.html'?'game.html':null;if(!file){res.writeHead(404);return res.end('Not found')}fs.readFile(path.join(PUBLIC,file),(e,b)=>{if(e){res.writeHead(500);return res.end('Server error')}res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-cache','x-content-type-options':'nosniff'});res.end(b)})});
+const wss=new WebSocketServer({server});wss.on('connection',ws=>{ws.on('message',raw=>{try{handle(ws,JSON.parse(raw.toString()))}catch(e){send(ws,{type:'error',message:'Invalid message.'})}});ws.on('close',()=>{const p=ws.player,r=ws.room;if(!p||!r)return;r.players.delete(p.id);broadcast(r,{type:'system',message:`${p.name} left the table.`});if(r.hostId===p.id)r.hostId=r.players.keys().next().value||null;if(!r.players.size)rooms.delete(r.id);else pushState(r)})});
+initDb().then(loadInvites).then(()=>server.listen(PORT,'0.0.0.0',()=>console.log(`COSA NOSTRA listening on ${PORT}`))).catch(err=>{console.error('Database initialization failed',err);process.exit(1)});
