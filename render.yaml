@@ -10,6 +10,14 @@ services:
         sync: false
       - key: INVITE_CODES
         sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_CURRENCY
+        value: "usd"
       - key: PHASE_MS
         value: "90000"
       - key: NATASHA_ADMIN_EMAIL
