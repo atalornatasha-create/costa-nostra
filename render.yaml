@@ -6,11 +6,11 @@ services:
     startCommand: npm start
     healthCheckPath: /health
     envVars:
-      - key: ADMIN_KEY
-        sync: false
-      - key: INVITE_CODES
-        sync: false
       - key: DATABASE_URL
+        sync: false
+      - key: REQUIRE_DATABASE
+        value: "true"
+      - key: APP_URL
         sync: false
       - key: STRIPE_SECRET_KEY
         sync: false
@@ -34,6 +34,8 @@ services:
         sync: false
       - key: NATASHA_ADMIN_X
         sync: false
+      - key: NATASHA_ADMIN_SNAPCHAT
+        sync: false
       - key: PEACE_ADMIN_EMAIL
         sync: false
       - key: PEACE_ADMIN_PASSWORD
@@ -47,6 +49,8 @@ services:
       - key: PEACE_ADMIN_TIKTOK
         sync: false
       - key: PEACE_ADMIN_X
+        sync: false
+      - key: PEACE_ADMIN_SNAPCHAT
         sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
@@ -65,6 +69,4 @@ services:
       - key: SMTP_PASS
         sync: false
       - key: SMTP_FROM
-        sync: false
-      - key: APP_URL
         sync: false
